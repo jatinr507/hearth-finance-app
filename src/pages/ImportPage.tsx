@@ -137,6 +137,7 @@ export function ImportPage({ user }: ImportPageProps) {
     if (!data) { setError('Failed to create account'); return }
     await refetchAccounts()
     setAccountId(data.id)
+    await loadDuplicates(data.id)
     setShowNewAccount(false)
     setNewAccount({ name: '', institution: '', type: 'checking' })
   }
@@ -151,7 +152,12 @@ export function ImportPage({ user }: ImportPageProps) {
     setError(null)
     const result = parseWithMapping(rawCsv, mapping)
     setParseResult(result)
-    setDuplicateKeys(new Set()) // reset; will populate when account is chosen
+    // If account already selected (e.g. user pressed Back), reload duplicates immediately
+    if (accountId) {
+      await loadDuplicates(accountId)
+    } else {
+      setDuplicateKeys(new Set())
+    }
     setStep('preview')
   }
 

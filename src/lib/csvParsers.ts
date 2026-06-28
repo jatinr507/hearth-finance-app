@@ -29,6 +29,11 @@ export interface ParseResult {
   skippedReasons: SkippedRow[]
 }
 
+function validMD(m: string, d: string): boolean {
+  const mo = parseInt(m, 10), dy = parseInt(d, 10)
+  return mo >= 1 && mo <= 12 && dy >= 1 && dy <= 31
+}
+
 function normalizeDate(raw: string): string | null {
   const s = raw.trim()
   if (!s) return null
@@ -36,15 +41,15 @@ function normalizeDate(raw: string): string | null {
   const slashParts = s.split('/')
   if (slashParts.length === 3) {
     const [a, b, c] = slashParts
-    if (c.length === 4) {
+    if (c.length === 4 && validMD(a, b)) {
       // MM/DD/YYYY
       return `${c}-${a.padStart(2, '0')}-${b.padStart(2, '0')}`
     }
-    if (a.length === 4) {
+    if (a.length === 4 && validMD(b, c)) {
       // YYYY/MM/DD
       return `${a}-${b.padStart(2, '0')}-${c.padStart(2, '0')}`
     }
-    if (c.length === 2) {
+    if (c.length === 2 && validMD(a, b)) {
       // MM/DD/YY — treat YY < 50 as 20xx, >= 50 as 19xx
       const year = parseInt(c, 10) < 50 ? `20${c}` : `19${c}`
       return `${year}-${a.padStart(2, '0')}-${b.padStart(2, '0')}`
@@ -54,15 +59,15 @@ function normalizeDate(raw: string): string | null {
   const dashParts = s.split('-')
   if (dashParts.length === 3) {
     const [a, b, c] = dashParts
-    if (a.length === 4) {
+    if (a.length === 4 && validMD(b, c)) {
       // YYYY-MM-DD (already ISO)
       return `${a}-${b.padStart(2, '0')}-${c.padStart(2, '0')}`
     }
-    if (c.length === 4) {
+    if (c.length === 4 && validMD(a, b)) {
       // MM-DD-YYYY
       return `${c}-${a.padStart(2, '0')}-${b.padStart(2, '0')}`
     }
-    if (c.length === 2) {
+    if (c.length === 2 && validMD(a, b)) {
       // MM-DD-YY
       const year = parseInt(c, 10) < 50 ? `20${c}` : `19${c}`
       return `${year}-${a.padStart(2, '0')}-${b.padStart(2, '0')}`
@@ -203,8 +208,14 @@ export function parseWithMapping(csv: string, mapping: ColumnMapping): ParseResu
     } else {
       const rawDebit = row[mapping.debit ?? '']?.trim() ?? ''
       const rawCredit = row[mapping.credit ?? '']?.trim() ?? ''
-      const debit = parseAmount(rawDebit) || 0
-      const credit = parseAmount(rawCredit) || 0
+      const debitVal = parseAmount(rawDebit)
+      const creditVal = parseAmount(rawCredit)
+      if (isNaN(debitVal) && isNaN(creditVal)) {
+        skippedReasons.push({ row: rowNum, reason: `Invalid amounts — debit: "${rawDebit}", credit: "${rawCredit}"` })
+        return
+      }
+      const debit = isNaN(debitVal) ? 0 : debitVal
+      const credit = isNaN(creditVal) ? 0 : creditVal
       if (debit === 0 && credit === 0) {
         skippedReasons.push({ row: rowNum, reason: 'Both debit and credit are empty or zero' })
         return
