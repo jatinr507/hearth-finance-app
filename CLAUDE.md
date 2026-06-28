@@ -37,20 +37,37 @@ Enable Google OAuth in Supabase Dashboard → Authentication → Providers → G
 - `src/lib/supabase.ts` — typed Supabase client using `src/types/database.ts`
 - `src/hooks/useAuth.ts` — session state + Google sign-in
 - `src/hooks/useTransactions.ts` / `useAccounts.ts` — data fetching hooks
-- `src/lib/csvParsers.ts` — Chase, Capital One, and PNC CSV parsing with auto-detection
+- `src/lib/csvParsers.ts` — bank-agnostic CSV parsing: `getHeaders`, `autoDetectMapping`, `parseWithMapping`
 
 **Pages:**
 - `/` → `DashboardPage` — net worth card, cash flow summary, 6-month spending bar chart, top categories, account list
 - `/transactions` → `TransactionsPage` — searchable/filterable transaction list grouped by date
-- `/import` → `ImportPage` — CSV upload with bank auto-detection, preview before saving, upserts with duplicate guard
+- `/import` → `ImportPage` — 4-step universal CSV import (Upload → Map Columns → Preview → Success)
 - `/accounts` → `AccountsPage` — CRUD for accounts with net worth summary
+
+**CSV Import flow** (`src/pages/ImportPage.tsx`):
+1. **Upload** — drop zone only, no account required upfront
+2. **Map Columns** — auto-detected column mapping with override dropdowns; single vs. split debit/credit mode; optional type column (for CSVs where amounts are always positive and a "Transaction Type" column says "Debit"/"Credit")
+3. **Preview** — account selector with inline account creation; summary badges (new / already imported / skipped); skipped row detail; duplicate detection via client-side Set keyed on `date|description|amount`
+4. **Success** — import count + reset
+
+**CSV parsing** (`src/lib/csvParsers.ts`):
+- `autoDetectMapping` — regex keyword matching on lowercased headers for date, description, amount, debit, credit, typeColumn
+- `normalizeDate` — handles `MM/DD/YYYY`, `YYYY/MM/DD`, `MM/DD/YY` (2-digit year), `YYYY-MM-DD`, `MM-DD-YYYY`, `MM-DD-YY`; validates month (1–12) and day (1–31) before accepting
+- `parseWithMapping` — returns `ParseResult` with skipped rows and reasons; NaN-safe amount handling
+- Credit transactions auto-assigned the system "Income" category at import time (since transaction sign is derived from `category.is_income`, not a DB column)
 
 **Database schema** (see `supabase/schema.sql`):
 - `accounts` — user-owned accounts with type (checking/savings/credit/investment/loan)
-- `categories` — system categories (user_id = null) + user-custom categories
+- `categories` — system categories (user_id = null) + user-custom categories; includes Income, Paycheck, Transfer, Credit Card Payment, and standard expense categories
 - `category_rules` — pattern-matching rules for auto-categorization (not yet wired to UI)
-- `transactions` — unique constraint on `(user_id, account_id, date, description, amount)` prevents CSV re-import duplicates
+- `transactions` — unique constraint on `(user_id, account_id, date, description, amount)` prevents CSV re-import duplicates; no `type`/`is_income` column — display sign is derived from `category.is_income`
+
+**Important implementation notes:**
+- Transaction income/expense display derives from `category?.is_income`, not a column on `transactions` — uncategorized transactions appear as expenses
+- Use `.maybeSingle()` (not `.single()`) when fetching optional system categories to avoid errors when a category is missing
+- Do not reference specific bank names (e.g. Chase, Capital One, PNC) in any user-facing content
 
 ## Planned V2
 
-Plaid integration for automatic bank sync — store `access_token` server-side via Supabase Edge Functions, use webhooks for new transactions. Supported institutions: Chase, PNC, Capital One.
+Bank sync integration via Plaid — store `access_token` server-side via Supabase Edge Functions, use webhooks for new transactions.
