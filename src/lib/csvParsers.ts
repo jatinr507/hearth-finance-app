@@ -1,22 +1,86 @@
 import Papa from 'papaparse'
 
+export interface ColumnMapping {
+  date: string
+  description: string
+  amountMode: 'single' | 'split'
+  amount?: string
+  debit?: string
+  credit?: string
+  typeColumn?: string  // optional column with "Debit"/"Credit" string values
+}
+
 export interface ParsedTransaction {
   date: string
   description: string
   amount: number
   type: 'debit' | 'credit'
+  raw: Record<string, string>
 }
 
-export type SupportedBank = 'chase' | 'capital_one' | 'pnc'
+export interface SkippedRow {
+  row: number
+  reason: string
+}
 
-function normalizeDate(raw: string): string {
-  // Normalize MM/DD/YYYY or YYYY-MM-DD to YYYY-MM-DD
-  const parts = raw.trim().split('/')
-  if (parts.length === 3) {
-    const [m, d, y] = parts
-    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+export interface ParseResult {
+  transactions: ParsedTransaction[]
+  skippedCount: number
+  skippedReasons: SkippedRow[]
+}
+
+function normalizeDate(raw: string): string | null {
+  const s = raw.trim()
+  if (!s) return null
+
+  const slashParts = s.split('/')
+  if (slashParts.length === 3) {
+    const [a, b, c] = slashParts
+    if (c.length === 4) {
+      // MM/DD/YYYY
+      return `${c}-${a.padStart(2, '0')}-${b.padStart(2, '0')}`
+    }
+    if (a.length === 4) {
+      // YYYY/MM/DD
+      return `${a}-${b.padStart(2, '0')}-${c.padStart(2, '0')}`
+    }
+    if (c.length === 2) {
+      // MM/DD/YY — treat YY < 50 as 20xx, >= 50 as 19xx
+      const year = parseInt(c, 10) < 50 ? `20${c}` : `19${c}`
+      return `${year}-${a.padStart(2, '0')}-${b.padStart(2, '0')}`
+    }
   }
-  return raw.trim()
+
+  const dashParts = s.split('-')
+  if (dashParts.length === 3) {
+    const [a, b, c] = dashParts
+    if (a.length === 4) {
+      // YYYY-MM-DD (already ISO)
+      return `${a}-${b.padStart(2, '0')}-${c.padStart(2, '0')}`
+    }
+    if (c.length === 4) {
+      // MM-DD-YYYY
+      return `${c}-${a.padStart(2, '0')}-${b.padStart(2, '0')}`
+    }
+    if (c.length === 2) {
+      // MM-DD-YY
+      const year = parseInt(c, 10) < 50 ? `20${c}` : `19${c}`
+      return `${year}-${a.padStart(2, '0')}-${b.padStart(2, '0')}`
+    }
+  }
+
+  // Last resort: native Date parse
+  const d = new Date(s)
+  if (!isNaN(d.getTime())) {
+    return d.toISOString().slice(0, 10)
+  }
+
+  return null
+}
+
+function parseAmount(raw: string): number {
+  if (!raw) return NaN
+  return parseFloat(raw.replace(/[$,\s]/g, ''))
 }
 
 function parseRows(csv: string): Record<string, string>[] {
@@ -28,99 +92,131 @@ function parseRows(csv: string): Record<string, string>[] {
   return result.data
 }
 
-function parseChase(csv: string): ParsedTransaction[] {
-  // Columns: Transaction Date, Post Date, Description, Category, Type, Amount, Memo
-  return parseRows(csv)
-    .filter((r) => r['Transaction Date'] && r['Amount'])
-    .map((r) => {
-      const amount = parseFloat(r['Amount'].replace(/[$,]/g, ''))
-      return {
-        date: normalizeDate(r['Transaction Date']),
-        description: r['Description']?.trim() ?? '',
-        // Chase uses negative for debits, positive for credits/payments
-        amount: Math.abs(amount),
-        type: amount < 0 ? 'debit' : 'credit',
-      }
-    })
+export function getHeaders(csv: string): string[] {
+  const result = Papa.parse<string[]>(csv, {
+    header: false,
+    preview: 1,
+  })
+  return (result.data[0] as string[] | undefined)?.map((h) => h.trim()) ?? []
 }
 
-function parseCapitalOne(csv: string): ParsedTransaction[] {
-  // Columns: Transaction Date, Posted Date, Card No., Description, Category, Debit, Credit
-  return parseRows(csv)
-    .filter((r) => r['Transaction Date'])
-    .map((r) => {
-      const debit = parseFloat(r['Debit']?.replace(/[$,]/g, '') || '0') || 0
-      const credit = parseFloat(r['Credit']?.replace(/[$,]/g, '') || '0') || 0
-      const isCredit = credit > 0
-      return {
-        date: normalizeDate(r['Transaction Date']),
-        description: r['Description']?.trim() ?? '',
-        amount: isCredit ? credit : debit,
-        type: isCredit ? 'credit' : 'debit',
-      }
-    })
-    .filter((t) => t.amount > 0)
+export function autoDetectMapping(headers: string[]): ColumnMapping {
+  const lower = headers.map((h) => h.toLowerCase())
+
+  const find = (pattern: RegExp): string => {
+    const idx = lower.findIndex((h) => pattern.test(h))
+    return idx >= 0 ? headers[idx] : ''
+  }
+
+  const dateCol = find(/^(transaction\s*)?date$|posted\s*date/)
+  const descCol = find(/description|memo|payee|name|narrative|details/)
+
+  // Amount column — match "Amount", "Transaction Amount", "Net Amount", etc.
+  const amountCol = find(/^(transaction\s*)?(net\s*)?amount$/)
+  // Separate debit/credit columns
+  const debitCol = find(/^debit$|^withdrawals?$|^charges?$/)
+  const creditCol = find(/^credit$|^deposits?$|^payments?$/)
+  // Type column (e.g. "Transaction Type" with "Debit"/"Credit" string values)
+  const typeCol = find(/^(transaction\s*)?type$|^dr\.?\/?cr\.?$/)
+
+  const hasSplit = !!(debitCol && creditCol)
+  const hasSingle = !!amountCol
+
+  if (hasSingle && !hasSplit) {
+    return {
+      date: dateCol,
+      description: descCol,
+      amountMode: 'single',
+      amount: amountCol,
+      typeColumn: typeCol || undefined,
+    }
+  }
+  if (hasSplit) {
+    return {
+      date: dateCol,
+      description: descCol,
+      amountMode: 'split',
+      debit: debitCol,
+      credit: creditCol,
+    }
+  }
+
+  // Fallback: find any column with "amount" in the name
+  const fallbackAmount = find(/amount|total|sum|value|price/)
+  return {
+    date: dateCol,
+    description: descCol,
+    amountMode: 'single',
+    amount: fallbackAmount,
+    typeColumn: typeCol || undefined,
+  }
 }
 
-function parsePNC(csv: string): ParsedTransaction[] {
-  // PNC CSV: Date, Description, Withdrawals, Deposits, Balance
-  // Some PNC exports use: Date,Description,Amount (negative = debit)
+// Returns true if the type column value indicates a debit/withdrawal
+function isDebitType(value: string): boolean {
+  const v = value.trim().toLowerCase()
+  return /^debit$|^dr$|^withdrawal|^charge|^out$/.test(v)
+}
+
+export function parseWithMapping(csv: string, mapping: ColumnMapping): ParseResult {
   const rows = parseRows(csv)
-  if (rows.length === 0) return []
+  const transactions: ParsedTransaction[] = []
+  const skippedReasons: SkippedRow[] = []
 
-  const headers = Object.keys(rows[0]).map((h) => h.toLowerCase())
-  const hasWithdrawals = headers.some((h) => h.includes('withdrawal'))
+  rows.forEach((row, idx) => {
+    const rowNum = idx + 2
 
-  return rows
-    .filter((r) => r['Date'])
-    .map((r) => {
-      if (hasWithdrawals) {
-        const withdrawal = parseFloat(r['Withdrawals']?.replace(/[$,]/g, '') || '0') || 0
-        const deposit = parseFloat(r['Deposits']?.replace(/[$,]/g, '') || '0') || 0
-        const isDeposit = deposit > 0
-        return {
-          date: normalizeDate(r['Date']),
-          description: r['Description']?.trim() ?? '',
-          amount: isDeposit ? deposit : withdrawal,
-          type: isDeposit ? ('credit' as const) : ('debit' as const),
-        }
-      } else {
-        const amount = parseFloat(r['Amount']?.replace(/[$,]/g, '') || '0')
-        return {
-          date: normalizeDate(r['Date']),
-          description: r['Description']?.trim() ?? '',
-          amount: Math.abs(amount),
-          type: amount < 0 ? ('debit' as const) : ('credit' as const),
-        }
+    // Date
+    const rawDate = row[mapping.date]?.trim() ?? ''
+    const date = normalizeDate(rawDate)
+    if (!date) {
+      skippedReasons.push({ row: rowNum, reason: `Missing or unrecognized date: "${rawDate}"` })
+      return
+    }
+
+    // Description
+    const description = row[mapping.description]?.trim() ?? ''
+
+    // Amount
+    let amount: number
+    let type: 'debit' | 'credit'
+
+    if (mapping.amountMode === 'single') {
+      const raw = row[mapping.amount ?? '']?.trim() ?? ''
+      const val = parseAmount(raw)
+      if (isNaN(val) || val === 0) {
+        skippedReasons.push({ row: rowNum, reason: `Invalid or zero amount: "${raw}"` })
+        return
       }
-    })
-    .filter((t) => t.amount > 0)
-}
+      amount = Math.abs(val)
 
-export function detectBank(csv: string): SupportedBank | null {
-  const header = csv.split('\n')[0].toLowerCase()
-  if (header.includes('transaction date') && header.includes('post date') && header.includes('type')) {
-    return 'chase'
-  }
-  if (header.includes('card no') || (header.includes('debit') && header.includes('credit'))) {
-    return 'capital_one'
-  }
-  if (header.includes('withdrawal') || header.includes('deposits')) {
-    return 'pnc'
-  }
-  return null
-}
+      // Determine type: prefer explicit type column, fall back to sign
+      if (mapping.typeColumn) {
+        const typeVal = row[mapping.typeColumn] ?? ''
+        type = isDebitType(typeVal) ? 'debit' : 'credit'
+      } else {
+        type = val < 0 ? 'debit' : 'credit'
+      }
+    } else {
+      const rawDebit = row[mapping.debit ?? '']?.trim() ?? ''
+      const rawCredit = row[mapping.credit ?? '']?.trim() ?? ''
+      const debit = parseAmount(rawDebit) || 0
+      const credit = parseAmount(rawCredit) || 0
+      if (debit === 0 && credit === 0) {
+        skippedReasons.push({ row: rowNum, reason: 'Both debit and credit are empty or zero' })
+        return
+      }
+      if (credit > 0) {
+        amount = credit
+        type = 'credit'
+      } else {
+        amount = debit
+        type = 'debit'
+      }
+    }
 
-export function parseCSV(csv: string, bank?: SupportedBank): ParsedTransaction[] {
-  const detected = bank ?? detectBank(csv)
-  switch (detected) {
-    case 'chase':
-      return parseChase(csv)
-    case 'capital_one':
-      return parseCapitalOne(csv)
-    case 'pnc':
-      return parsePNC(csv)
-    default:
-      throw new Error('Unrecognized CSV format. Please select your bank manually.')
-  }
+    transactions.push({ date, description, amount, type, raw: row })
+  })
+
+  return { transactions, skippedCount: skippedReasons.length, skippedReasons }
 }
