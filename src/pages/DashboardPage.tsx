@@ -1,7 +1,7 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { startOfMonth, endOfMonth, format, subMonths } from 'date-fns'
 import { TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownRight } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, AreaChart, Area } from 'recharts'
 import { Card } from '@/components/ui/Card'
 import { formatCurrency } from '@/lib/utils'
 import { useTransactions } from '@/hooks/useTransactions'
@@ -12,9 +12,18 @@ interface DashboardPageProps {
   user: User
 }
 
+const RANGES = [
+  { label: '3M', months: 3 },
+  { label: '6M', months: 6 },
+  { label: '1Y', months: 12 },
+] as const
+
+type RangeLabel = typeof RANGES[number]['label']
+
 export function DashboardPage({ user }: DashboardPageProps) {
   const { transactions, loading: txLoading } = useTransactions(user.id)
   const { accounts, loading: accLoading } = useAccounts(user.id)
+  const [netWorthRange, setNetWorthRange] = useState<RangeLabel>('6M')
 
   const now = new Date()
   const monthStart = startOfMonth(now)
@@ -43,6 +52,32 @@ export function DashboardPage({ user }: DashboardPageProps) {
       return a.type === 'credit' || a.type === 'loan' ? sum - a.balance : sum + a.balance
     }, 0)
   }, [accounts])
+
+  const netWorthHistory = useMemo(() => {
+    const months = RANGES.find((r) => r.label === netWorthRange)?.months ?? 6
+    // Build month buckets from oldest → newest
+    const buckets = Array.from({ length: months + 1 }, (_, i) => {
+      const month = subMonths(now, months - i)
+      const start = startOfMonth(month)
+      const end = endOfMonth(month)
+      const net = transactions
+        .filter((t) => { const d = new Date(t.date); return d >= start && d <= end })
+        .reduce((s, t) => s + (t.category?.is_income ? t.amount : -t.amount), 0)
+      return { month: format(month, months > 6 ? 'MMM yy' : 'MMM'), net, label: format(month, 'MMMM yyyy') }
+    })
+    // Work backwards from current net worth to reconstruct history
+    let running = netWorth
+    const result = [...buckets].reverse().map((b) => {
+      const point = { month: b.month, netWorth: running, label: b.label }
+      running -= b.net
+      return point
+    })
+    return result.reverse()
+  }, [transactions, netWorth, netWorthRange, now])
+
+  const netWorthTrend = netWorthHistory.length >= 2
+    ? netWorthHistory[netWorthHistory.length - 1].netWorth - netWorthHistory[0].netWorth
+    : 0
 
   const monthlyData = useMemo(() => {
     return Array.from({ length: 6 }, (_, i) => {
@@ -101,11 +136,51 @@ export function DashboardPage({ user }: DashboardPageProps) {
       <div className="lg:grid lg:grid-cols-[1fr_300px] lg:gap-6 space-y-4 lg:space-y-0">
         {/* Left column */}
         <div className="space-y-4">
-          {/* Net Worth — dark ink hero card */}
+          {/* Net Worth — dark ink hero card with chart */}
           <Card className="bg-ink border-0 rounded-lg">
-            <p className="text-on-ink-muted text-xs font-semibold uppercase tracking-widest">Net Worth</p>
-            <p className="text-3xl font-bold mt-1 text-on-ink amount">{formatCurrency(netWorth)}</p>
-            <p className="text-on-ink-muted text-xs mt-2">{format(now, 'MMMM yyyy')}</p>
+            <div className="flex items-start justify-between mb-1">
+              <div>
+                <p className="text-on-ink-muted text-xs font-semibold uppercase tracking-widest">Net Worth</p>
+                <p className="text-3xl font-bold mt-1 text-on-ink amount">{formatCurrency(netWorth)}</p>
+                <p className={`text-xs mt-1 font-medium ${netWorthTrend >= 0 ? 'text-sage' : 'text-rust'}`}>
+                  {netWorthTrend >= 0 ? '↑' : '↓'} {formatCurrency(Math.abs(netWorthTrend))} this period
+                </p>
+              </div>
+              <div className="flex gap-1">
+                {RANGES.map((r) => (
+                  <button
+                    key={r.label}
+                    onClick={() => setNetWorthRange(r.label)}
+                    className={`text-xs px-2 py-1 rounded-md font-medium transition-colors ${
+                      netWorthRange === r.label
+                        ? 'bg-clay text-white'
+                        : 'text-on-ink-muted hover:text-on-ink'
+                    }`}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mt-3 -mx-4 -mb-4">
+              <ResponsiveContainer width="100%" height={120}>
+                <AreaChart data={netWorthHistory} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="nwGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#BE6E46" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#BE6E46" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#9A8E79' }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    formatter={(v: number) => [formatCurrency(v), 'Net Worth']}
+                    labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? ''}
+                    contentStyle={{ fontSize: 12, borderRadius: 12, border: '1px solid #3A332B', backgroundColor: '#29241E', color: '#F2EBDD' }}
+                  />
+                  <Area type="monotone" dataKey="netWorth" stroke="#BE6E46" strokeWidth={2} fill="url(#nwGradient)" dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
           </Card>
 
           {/* Cash Flow */}
