@@ -37,6 +37,7 @@ export function AccountsPage({ user }: AccountsPageProps) {
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ name: '', institution: '', type: 'checking' as AccountType, balance: '' })
 
+  const [error, setError] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({ name: '', balance: '', type: 'checking' as AccountType })
   const [editSaving, setEditSaving] = useState(false)
@@ -48,16 +49,21 @@ export function AccountsPage({ user }: AccountsPageProps) {
   async function handleAdd() {
     if (!form.name || !form.institution) return
     setSaving(true)
-    await supabase.from('accounts').insert({
+    setError(null)
+    const { error: err } = await supabase.from('accounts').insert({
       user_id: user.id,
       name: form.name,
       institution: form.institution,
       type: form.type,
       balance: parseFloat(form.balance) || 0,
     })
+    setSaving(false)
+    if (err) {
+      setError(err.message)
+      return
+    }
     setForm({ name: '', institution: '', type: 'checking', balance: '' })
     setShowForm(false)
-    setSaving(false)
     refetch()
   }
 
@@ -147,6 +153,7 @@ export function AccountsPage({ user }: AccountsPageProps) {
               className={inputCls}
             />
           </div>
+          {error && <p className="text-xs text-rust">{error}</p>}
           <div className="flex gap-2">
             <Button variant="secondary" className="flex-1" onClick={() => setShowForm(false)}>Cancel</Button>
             <Button className="flex-1" onClick={handleAdd} disabled={saving || !form.name}>
