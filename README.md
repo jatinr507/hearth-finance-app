@@ -1,32 +1,83 @@
-# React + TypeScript + Vite
+# Hearth
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+**A calm, private personal finance tracker.**
 
-Currently, two official plugins are available:
+Hearth is an open-source personal finance web app for tracking net worth, spending, and cash flow. Designed to be calm and private: your data lives in your own Supabase project, not a third-party aggregator. Import transactions from your bank via standard CSV export.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Dashboard** — net worth card, 6-month spending bar chart, cash flow summary, and top spending categories
+- **Transactions** — searchable and filterable list grouped by date; tap any row to assign a category
+- **Accounts** — add and manage checking, savings, credit, investment, and loan accounts
+- **CSV Import** — auto-detection of bank format, duplicate-safe upserts, category auto-assignment via rules
+- **Category rules** — keyword → category mapping applied automatically on every import
+- **Auth** — Google Sign-In via Supabase, with per-user Row Level Security on all data
 
-## Expanding the Oxlint configuration
+---
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+## Tech Stack
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
+| Layer | Technology |
+|---|---|
+| Frontend | React 19, TypeScript, Vite |
+| Styling | Tailwind CSS v4 |
+| Routing | React Router v7 |
+| Backend | Supabase (Postgres + Auth + RLS) |
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+---
+
+## Getting Started
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org) 18+
+- A free [Supabase](https://supabase.com) project
+- Google OAuth credentials (for sign-in)
+
+### Setup
+
+1. **Clone the repo**
+   ```bash
+   git clone https://github.com/jatinr507/hearth-finance-app.git
+   cd hearth-finance-app
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Configure environment**
+   ```bash
+   cp .env.example .env
+   ```
+   Fill in your Supabase credentials in `.env`:
+
+   | Variable | Description |
+   |---|---|
+   | `VITE_SUPABASE_URL` | Your Supabase project URL |
+   | `VITE_SUPABASE_ANON_KEY` | Your Supabase anon/public key |
+
+4. **Create the database schema**
+
+   Run `supabase/schema.sql` in the Supabase SQL editor. This creates tables, RLS policies, and seeds default categories.
+
+5. **Enable Google OAuth**
+
+   In your Supabase dashboard: Authentication → Providers → Google → enable and add your OAuth credentials.
+
+6. **Start the dev server**
+   ```bash
+   npm run dev
+   ```
+   Open [http://localhost:5173](http://localhost:5173).
+
+---
+
+## Roadmap
+
+- **Automatic bank sync** — no more CSV exports, via a read-only bank integration
+- **Secure server-side token storage** — via Supabase Edge Functions
+- **Webhook-driven transaction updates** — stay current without manual imports
