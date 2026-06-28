@@ -1,5 +1,5 @@
 import { useMemo, useState, useId } from 'react'
-import { startOfMonth, endOfMonth, format, subMonths, parseISO } from 'date-fns'
+import { startOfMonth, endOfMonth, format, subMonths, parseISO, startOfYear } from 'date-fns'
 import { TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, AreaChart, Area } from 'recharts'
 import { Card } from '@/components/ui/Card'
@@ -20,32 +20,62 @@ const RANGES = [
 
 type RangeLabel = typeof RANGES[number]['label']
 
+const CASH_FLOW_PERIODS = [
+  { key: 'month', label: 'This month' },
+  { key: 'lastMonth', label: 'Last month' },
+  { key: '3m', label: '3 months' },
+  { key: '6m', label: '6 months' },
+  { key: 'year', label: 'This year' },
+  { key: 'all', label: 'All time' },
+] as const
+
+type CashFlowPeriod = typeof CASH_FLOW_PERIODS[number]['key']
+
 export function DashboardPage({ user }: DashboardPageProps) {
   const { transactions, loading: txLoading } = useTransactions(user.id)
   const { accounts, loading: accLoading } = useAccounts(user.id)
   const [netWorthRange, setNetWorthRange] = useState<RangeLabel>('6M')
+  const [cashFlowPeriod, setCashFlowPeriod] = useState<CashFlowPeriod>('month')
   const gradientId = useId()
 
   const now = useMemo(() => new Date(), [])
-  const monthStart = useMemo(() => startOfMonth(now), [now])
-  const monthEnd = useMemo(() => endOfMonth(now), [now])
 
-  const thisMonthTx = useMemo(
+  const cashFlowRange = useMemo(() => {
+    switch (cashFlowPeriod) {
+      case 'month':
+        return { start: startOfMonth(now), end: endOfMonth(now), label: 'This month' }
+      case 'lastMonth': {
+        const last = subMonths(now, 1)
+        return { start: startOfMonth(last), end: endOfMonth(last), label: 'Last month' }
+      }
+      case '3m':
+        return { start: startOfMonth(subMonths(now, 2)), end: endOfMonth(now), label: 'Last 3 months' }
+      case '6m':
+        return { start: startOfMonth(subMonths(now, 5)), end: endOfMonth(now), label: 'Last 6 months' }
+      case 'year':
+        return { start: startOfYear(now), end: endOfMonth(now), label: 'This year' }
+      case 'all':
+        return { start: null, end: null, label: 'All time' }
+    }
+  }, [cashFlowPeriod, now])
+
+  const cashFlowTx = useMemo(
     () => transactions.filter((t) => {
+      if (!cashFlowRange.start || !cashFlowRange.end) return true
       const d = parseISO(t.date)
-      return d >= monthStart && d <= monthEnd
+      return d >= cashFlowRange.start && d <= cashFlowRange.end
     }),
-    [transactions, monthStart, monthEnd],
+    [transactions, cashFlowRange],
   )
 
   const income = useMemo(
-    () => thisMonthTx.filter((t) => t.category?.is_income).reduce((s, t) => s + t.amount, 0),
-    [thisMonthTx],
+    () => cashFlowTx.filter((t) => t.category?.is_income).reduce((s, t) => s + t.amount, 0),
+    [cashFlowTx],
   )
 
   const spending = useMemo(
-    () => thisMonthTx.filter((t) => !t.category?.is_income).reduce((s, t) => s + t.amount, 0),
-    [thisMonthTx],
+    () => cashFlowTx.filter((t) => !t.category?.is_income).reduce((s, t) => s + t.amount, 0),
+    [cashFlowTx],
   )
 
   const netWorth = useMemo(() => {
@@ -97,7 +127,7 @@ export function DashboardPage({ user }: DashboardPageProps) {
 
   const topCategories = useMemo(() => {
     const map = new Map<string, { name: string; color: string; total: number }>()
-    thisMonthTx
+    cashFlowTx
       .filter((t) => !t.category?.is_income && t.category)
       .forEach((t) => {
         const cat = t.category!
@@ -107,7 +137,7 @@ export function DashboardPage({ user }: DashboardPageProps) {
     return Array.from(map.values())
       .sort((a, b) => b.total - a.total)
       .slice(0, 5)
-  }, [thisMonthTx])
+  }, [cashFlowTx])
 
   const netCashFlow = income - spending
   const avgSpending = useMemo(
@@ -185,28 +215,45 @@ export function DashboardPage({ user }: DashboardPageProps) {
           </Card>
 
           {/* Cash Flow */}
-          <div className="grid grid-cols-2 gap-3">
-            <Card>
-              <div className="flex items-center gap-2 text-sage mb-1">
-                <ArrowUpRight className="w-4 h-4" />
-                <span className="text-xs font-semibold">Income</span>
-              </div>
-              <p className="text-lg font-bold text-ink amount">{formatCurrency(income)}</p>
-              <p className="text-xs text-muted">This month</p>
-            </Card>
-            <Card>
-              <div className="flex items-center gap-2 text-rust mb-1">
-                <ArrowDownRight className="w-4 h-4" />
-                <span className="text-xs font-semibold">Spending</span>
-              </div>
-              <p className="text-lg font-bold text-ink amount">{formatCurrency(spending)}</p>
-              <p className="text-xs text-muted">This month</p>
-            </Card>
+          <div>
+            <div className="flex gap-1.5 mb-3 overflow-x-auto pb-0.5 scrollbar-none">
+              {CASH_FLOW_PERIODS.map((p) => (
+                <button
+                  key={p.key}
+                  onClick={() => setCashFlowPeriod(p.key)}
+                  className={`text-xs px-3 py-1 rounded-full font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
+                    cashFlowPeriod === p.key
+                      ? 'bg-ink text-on-ink'
+                      : 'bg-sand text-muted hover:text-ink'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Card>
+                <div className="flex items-center gap-2 text-sage mb-1">
+                  <ArrowUpRight className="w-4 h-4" />
+                  <span className="text-xs font-semibold">Income</span>
+                </div>
+                <p className="text-lg font-bold text-ink amount">{formatCurrency(income)}</p>
+                <p className="text-xs text-muted">{cashFlowRange.label}</p>
+              </Card>
+              <Card>
+                <div className="flex items-center gap-2 text-rust mb-1">
+                  <ArrowDownRight className="w-4 h-4" />
+                  <span className="text-xs font-semibold">Spending</span>
+                </div>
+                <p className="text-lg font-bold text-ink amount">{formatCurrency(spending)}</p>
+                <p className="text-xs text-muted">{cashFlowRange.label}</p>
+              </Card>
+            </div>
           </div>
 
           {/* Net savings line */}
           <p className={`text-sm font-medium -mt-1 px-1 ${netCashFlow >= 0 ? 'text-sage' : 'text-rust'}`}>
-            {netCashFlow >= 0 ? '+' : ''}{formatCurrency(netCashFlow)} {netCashFlow >= 0 ? 'saved' : 'over budget'} this month
+            {netCashFlow >= 0 ? '+' : ''}{formatCurrency(netCashFlow)} {netCashFlow >= 0 ? 'saved' : 'over budget'} · {cashFlowRange.label.toLowerCase()}
           </p>
 
           {/* Chart */}
