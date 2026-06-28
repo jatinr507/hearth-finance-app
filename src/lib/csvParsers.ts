@@ -69,10 +69,13 @@ function normalizeDate(raw: string): string | null {
     }
   }
 
-  // Last resort: native Date parse
+  // Last resort: native Date parse — use local date parts to avoid UTC-offset day shift
   const d = new Date(s)
   if (!isNaN(d.getTime())) {
-    return d.toISOString().slice(0, 10)
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
   }
 
   return null

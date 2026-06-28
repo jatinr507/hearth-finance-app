@@ -134,6 +134,7 @@ export function ImportPage({ user }: ImportPageProps) {
       .single()
     setCreatingAccount(false)
     if (err) { setError(err.message); return }
+    if (!data) { setError('Failed to create account'); return }
     await refetchAccounts()
     setAccountId(data.id)
     setShowNewAccount(false)
@@ -172,7 +173,7 @@ export function ImportPage({ user }: ImportPageProps) {
 
     const [{ data: rulesData }, { data: incomeCategory }] = await Promise.all([
       supabase.from('category_rules').select('*').eq('user_id', user.id),
-      supabase.from('categories').select('id').eq('name', 'Income').eq('is_system', true).single(),
+      supabase.from('categories').select('id').eq('name', 'Income').eq('is_system', true).maybeSingle(),
     ])
     const rules: CategoryRule[] = rulesData ?? []
     const incomeCategoryId: string | null = incomeCategory?.id ?? null
