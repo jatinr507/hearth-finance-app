@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { startOfMonth, endOfMonth, format, subMonths } from 'date-fns'
+import { useMemo, useState, useId } from 'react'
+import { startOfMonth, endOfMonth, format, subMonths, parseISO } from 'date-fns'
 import { TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, AreaChart, Area } from 'recharts'
 import { Card } from '@/components/ui/Card'
@@ -24,14 +24,15 @@ export function DashboardPage({ user }: DashboardPageProps) {
   const { transactions, loading: txLoading } = useTransactions(user.id)
   const { accounts, loading: accLoading } = useAccounts(user.id)
   const [netWorthRange, setNetWorthRange] = useState<RangeLabel>('6M')
+  const gradientId = useId()
 
-  const now = new Date()
-  const monthStart = startOfMonth(now)
-  const monthEnd = endOfMonth(now)
+  const now = useMemo(() => new Date(), [])
+  const monthStart = useMemo(() => startOfMonth(now), [now])
+  const monthEnd = useMemo(() => endOfMonth(now), [now])
 
   const thisMonthTx = useMemo(
     () => transactions.filter((t) => {
-      const d = new Date(t.date)
+      const d = parseISO(t.date)
       return d >= monthStart && d <= monthEnd
     }),
     [transactions, monthStart, monthEnd],
@@ -61,7 +62,7 @@ export function DashboardPage({ user }: DashboardPageProps) {
       const start = startOfMonth(month)
       const end = endOfMonth(month)
       const net = transactions
-        .filter((t) => { const d = new Date(t.date); return d >= start && d <= end })
+        .filter((t) => { const d = parseISO(t.date); return d >= start && d <= end })
         .reduce((s, t) => s + (t.category?.is_income ? t.amount : -t.amount), 0)
       return { month: format(month, months > 6 ? 'MMM yy' : 'MMM'), net, label: format(month, 'MMMM yyyy') }
     })
@@ -86,7 +87,7 @@ export function DashboardPage({ user }: DashboardPageProps) {
       const end = endOfMonth(month)
       const total = transactions
         .filter((t) => {
-          const d = new Date(t.date)
+          const d = parseISO(t.date)
           return d >= start && d <= end && !t.category?.is_income
         })
         .reduce((s, t) => s + t.amount, 0)
@@ -166,7 +167,7 @@ export function DashboardPage({ user }: DashboardPageProps) {
               <ResponsiveContainer width="100%" height={120}>
                 <AreaChart data={netWorthHistory} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
                   <defs>
-                    <linearGradient id="nwGradient" x1="0" y1="0" x2="0" y2="1">
+                    <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#BE6E46" stopOpacity={0.3} />
                       <stop offset="95%" stopColor="#BE6E46" stopOpacity={0} />
                     </linearGradient>
@@ -177,7 +178,7 @@ export function DashboardPage({ user }: DashboardPageProps) {
                     labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? ''}
                     contentStyle={{ fontSize: 12, borderRadius: 12, border: '1px solid #3A332B', backgroundColor: '#29241E', color: '#F2EBDD' }}
                   />
-                  <Area type="monotone" dataKey="netWorth" stroke="#BE6E46" strokeWidth={2} fill="url(#nwGradient)" dot={false} />
+                  <Area type="monotone" dataKey="netWorth" stroke="#BE6E46" strokeWidth={2} fill={`url(#${gradientId})`} dot={false} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
