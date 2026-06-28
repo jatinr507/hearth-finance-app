@@ -40,6 +40,7 @@ insert into public.categories (name, color, icon, is_income, is_system) values
   ('Healthcare', '#ef4444', '🏥', false, true),
   ('Insurance', '#64748b', '🛡️', false, true),
   ('Rent & Mortgage', '#1d4ed8', '🏠', false, true),
+  ('Credit Card Payment', '#64748b', '💳', false, true),
   ('Other', '#94a3b8', '📦', false, true)
 on conflict do nothing;
 
