@@ -88,10 +88,18 @@ create policy "Users read system and own categories"
   on public.categories for select
   using (user_id is null or auth.uid() = user_id);
 
-create policy "Users manage own categories"
-  on public.categories for insert update delete
+create policy "Users insert own categories"
+  on public.categories for insert
+  with check (auth.uid() = user_id);
+
+create policy "Users update own categories"
+  on public.categories for update
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+create policy "Users delete own categories"
+  on public.categories for delete
+  using (auth.uid() = user_id);
 
 -- RLS Policies: category_rules
 create policy "Users manage own rules"

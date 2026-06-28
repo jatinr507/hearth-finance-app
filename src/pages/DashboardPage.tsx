@@ -3,7 +3,6 @@ import { startOfMonth, endOfMonth, format, subMonths } from 'date-fns'
 import { TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { Card } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
 import { formatCurrency } from '@/lib/utils'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useAccounts } from '@/hooks/useAccounts'
@@ -74,6 +73,12 @@ export function DashboardPage({ user }: DashboardPageProps) {
       .slice(0, 5)
   }, [thisMonthTx])
 
+  const netCashFlow = income - spending
+  const avgSpending = useMemo(
+    () => monthlyData.slice(0, 5).reduce((s, d) => s + d.total, 0) / 5,
+    [monthlyData],
+  )
+
   if (txLoading || accLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -123,11 +128,17 @@ export function DashboardPage({ user }: DashboardPageProps) {
             </Card>
           </div>
 
+          {/* Net savings line */}
+          <p className={`text-sm font-medium -mt-1 px-1 ${netCashFlow >= 0 ? 'text-sage' : 'text-rust'}`}>
+            {netCashFlow >= 0 ? '+' : ''}{formatCurrency(netCashFlow)} {netCashFlow >= 0 ? 'saved' : 'over budget'} this month
+          </p>
+
           {/* Chart */}
           <Card>
             <div className="flex items-center gap-2 mb-4">
               <TrendingDown className="w-4 h-4 text-muted" />
               <h2 className="text-sm font-semibold text-ink-2">Spending Trend</h2>
+              <span className="text-xs text-muted ml-auto">Avg {formatCurrency(avgSpending)}/mo</span>
             </div>
             <ResponsiveContainer width="100%" height={160}>
               <BarChart data={monthlyData} barSize={28}>
@@ -153,13 +164,19 @@ export function DashboardPage({ user }: DashboardPageProps) {
             <Card>
               <div className="flex items-center gap-2 mb-3">
                 <TrendingUp className="w-4 h-4 text-muted" />
-                <h2 className="text-sm font-semibold text-ink-2">Top Categories</h2>
+                <h2 className="text-sm font-semibold text-ink-2">Spending by Category</h2>
               </div>
               <div className="space-y-3">
                 {topCategories.map((cat) => (
-                  <div key={cat.name} className="flex items-center justify-between">
-                    <Badge label={cat.name} color={cat.color} />
-                    <span className="text-sm font-semibold text-ink amount">{formatCurrency(cat.total)}</span>
+                  <div key={cat.name} className="flex items-center gap-3">
+                    <span className="text-sm text-ink w-24 truncate">{cat.name}</span>
+                    <div className="flex-1 h-1.5 bg-sand rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full"
+                        style={{ width: `${(cat.total / topCategories[0].total) * 100}%`, backgroundColor: cat.color }}
+                      />
+                    </div>
+                    <span className="text-sm font-semibold text-ink amount w-20 text-right">{formatCurrency(cat.total)}</span>
                   </div>
                 ))}
               </div>
