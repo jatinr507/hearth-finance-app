@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, List, Upload, Wallet, Settings } from 'lucide-react'
+import { LayoutDashboard, List, Upload, Wallet, Settings, LogOut } from 'lucide-react'
 import { HearthMark } from '@/components/ui/HearthMark'
+import { useAuth } from '@/hooks/useAuth'
 
 const NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -11,6 +12,8 @@ const NAV_ITEMS = [
 ]
 
 export function SideNav() {
+  const { signOut } = useAuth()
+
   return (
     <aside className="hidden lg:flex flex-col fixed left-0 top-0 h-svh w-60 bg-surface border-r border-hairline z-40">
       <div className="px-5 pt-7 pb-6">
@@ -39,6 +42,16 @@ export function SideNav() {
           </NavLink>
         ))}
       </nav>
+
+      <div className="px-3 pb-4">
+        <button
+          onClick={() => signOut()}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-sm text-sm font-medium text-muted hover:bg-sand hover:text-ink transition-colors"
+        >
+          <LogOut className="w-5 h-5 shrink-0" />
+          Sign out
+        </button>
+      </div>
     </aside>
   )
 }

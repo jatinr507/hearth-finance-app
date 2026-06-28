@@ -1,8 +1,5 @@
 import type { User } from '@supabase/supabase-js'
-import { LogOut } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
-import { Button } from '@/components/ui/Button'
-import { useAuth } from '@/hooks/useAuth'
 import { CategoryRulesSection } from '@/components/CategoryRulesSection'
 
 interface SettingsPageProps {
@@ -10,8 +7,6 @@ interface SettingsPageProps {
 }
 
 export function SettingsPage({ user }: SettingsPageProps) {
-  const { signOut } = useAuth()
-
   const displayName = user.user_metadata?.full_name ?? user.email ?? 'User'
   const email = user.email ?? ''
   const avatarUrl = user.user_metadata?.avatar_url as string | undefined
@@ -27,7 +22,7 @@ export function SettingsPage({ user }: SettingsPageProps) {
       <h1 className="text-xl font-bold text-gray-900 mb-4 lg:mb-6">Settings</h1>
 
       <div className="lg:grid lg:grid-cols-[280px_1fr] lg:gap-6 space-y-4 lg:space-y-0 lg:items-start">
-        {/* Left column — profile + sign out */}
+        {/* Left column — profile */}
         <div className="space-y-4">
           <Card className="flex items-center gap-4">
             {avatarUrl ? (
@@ -40,19 +35,6 @@ export function SettingsPage({ user }: SettingsPageProps) {
             <div className="min-w-0">
               <p className="font-semibold text-gray-900 truncate">{displayName}</p>
               <p className="text-sm text-gray-500 truncate">{email}</p>
-            </div>
-          </Card>
-
-          <Card>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-gray-900">Sign out</p>
-                <p className="text-sm text-gray-500">Sign out of your account</p>
-              </div>
-              <Button variant="destructive" size="sm" onClick={() => signOut()}>
-                <LogOut className="w-4 h-4" />
-                Sign out
-              </Button>
             </div>
           </Card>
         </div>
