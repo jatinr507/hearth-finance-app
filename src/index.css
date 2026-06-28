@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+@theme {
+  /* Neutrals */
+  --color-paper:    #EFE7DA;
+  --color-surface:  #FBF8F2;
+  --color-sand:     #E7DCC9;
+  --color-hairline: #E2D9CA;
+  --color-ink:      #2B2620;
+  --color-ink-2:    #6F6657;
+  --color-muted:    #8A7F6D;
+
+  /* Brand & semantic */
+  --color-clay:     #BE6E46;
+  --color-sage:     #7C8A5A;
+  --color-rust:     #B4502F;
+
+  /* Tints */
+  --color-tint-sage:     #EAF0DC;
+  --color-tint-sage-ink: #566237;
+  --color-tint-clay:     #F4E3D6;
+  --color-tint-clay-ink: #A05636;
+
+  /* On-dark */
+  --color-on-ink:        #FBF8F2;
+  --color-on-ink-muted:  #C8BEAC;
+  --color-on-ink-accent: #E7C9A8;
+
+  /* Typography */
+  --font-sans:   "Hanken Grotesk", system-ui, -apple-system, sans-serif;
+  --font-accent: "Newsreader", Georgia, serif;
+
+  /* Border radius */
+  --radius-sm:   12px;
+  --radius-md:   16px;
+  --radius-lg:   22px;
+  --radius-pill: 999px;
+
+  /* Shadows */
+  --shadow-card:  0 1px 2px rgba(43,38,32,0.04);
+  --shadow-float: 0 24px 60px rgba(43,38,32,0.22);
+}
+
+@layer base {
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: "Hanken Grotesk", system-ui, -apple-system, sans-serif;
+    background-color: #EFE7DA;
+    color: #2B2620;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #root {
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+.amount { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.accent { font-family: "Newsreader", Georgia, serif; font-style: italic; font-weight: 500; }
