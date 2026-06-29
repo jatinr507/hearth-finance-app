@@ -46,26 +46,32 @@ export interface Transaction {
 
 export interface Database {
   public: {
+    Views: Record<string, never>
+    Functions: Record<string, never>
     Tables: {
       accounts: {
         Row: Account
         Insert: Omit<Account, 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Omit<Account, 'id' | 'user_id' | 'created_at' | 'updated_at'>>
+        Relationships: []
       }
       categories: {
         Row: Category
         Insert: Omit<Category, 'id'>
         Update: Partial<Omit<Category, 'id'>>
+        Relationships: []
       }
       category_rules: {
         Row: CategoryRule
         Insert: Omit<CategoryRule, 'id'>
         Update: Partial<Omit<CategoryRule, 'id' | 'user_id'>>
+        Relationships: []
       }
       transactions: {
         Row: Transaction
         Insert: Omit<Transaction, 'id' | 'created_at' | 'account' | 'category'>
         Update: Partial<Omit<Transaction, 'id' | 'user_id' | 'created_at' | 'account' | 'category'>>
+        Relationships: []
       }
     }
   }
