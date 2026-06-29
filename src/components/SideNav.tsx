@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, List, Upload, Wallet, Settings, LogOut } from 'lucide-react'
+import { LayoutDashboard, List, Upload, BarChart3, Wallet, Settings, LogOut } from 'lucide-react'
 import { HearthMark } from '@/components/ui/HearthMark'
 import { useAuth } from '@/hooks/useAuth'
 
 const NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/transactions', icon: List, label: 'Transactions' },
+  { to: '/reports', icon: BarChart3, label: 'Reports' },
   { to: '/import', icon: Upload, label: 'Import' },
   { to: '/accounts', icon: Wallet, label: 'Accounts' },
   { to: '/settings', icon: Settings, label: 'Settings' },
