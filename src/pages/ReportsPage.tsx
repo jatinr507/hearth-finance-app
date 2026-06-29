@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { parseISO, subMonths, startOfMonth } from 'date-fns'
+import { parseISO, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 import { BarChart3, Image, Sheet } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 import { Card } from '@/components/ui/Card'
@@ -9,20 +9,24 @@ import { useTransactions } from '@/hooks/useTransactions'
 import { useAccounts } from '@/hooks/useAccounts'
 import { formatAmount } from '@/lib/utils'
 import { incomeAmount, expenseAmount } from '@/lib/txnClassify'
-import { buildSankey, groupByMonth, stackedSpendingByMonth } from '@/lib/reportAggregations'
+import { buildSankey, groupByMonth, stackedSpendingByMonth, groupByCategory } from '@/lib/reportAggregations'
 import { downloadPng, downloadCsv } from '@/lib/reportExport'
 import { SankeyReport } from '@/components/reports/SankeyReport'
 import { BarReport, type IncomeExpenseMonth } from '@/components/reports/BarReport'
 import { StackedBarReport } from '@/components/reports/StackedBarReport'
+import { ReportSummary } from '@/components/reports/ReportSummary'
+import { ChartCarousel } from '@/components/reports/ChartCarousel'
 
 interface ReportsPageProps {
   user: User
 }
 
 const RANGES = [
-  { label: '3M', months: 3 },
-  { label: '6M', months: 6 },
-  { label: '1Y', months: 12 },
+  { label: 'Current', kind: 'month', offset: 0 },
+  { label: 'Last Month', kind: 'month', offset: 1 },
+  { label: '3M', kind: 'range', months: 3 },
+  { label: '6M', kind: 'range', months: 6 },
+  { label: '1Y', kind: 'range', months: 12 },
 ] as const
 type RangeLabel = typeof RANGES[number]['label']
 
@@ -41,27 +45,52 @@ export function ReportsPage({ user }: ReportsPageProps) {
   const [accountIds, setAccountIds] = useState<Set<string>>(new Set())
 
   const now = useMemo(() => new Date(), [])
-  const months = RANGES.find((r) => r.label === range)?.months ?? 6
+
+  // Resolve the active time filter into a [start, end] window plus the month-bucket
+  // params (`months` count + `anchor` = the month the buckets end on) reused by the
+  // bar/stacked aggregation helpers. Single-month filters collapse to one bucket.
+  const { windowStart, windowEnd, months, anchor } = useMemo(() => {
+    const cfg = RANGES.find((r) => r.label === range) ?? RANGES[3]
+    if (cfg.kind === 'month') {
+      const m = subMonths(now, cfg.offset)
+      return { windowStart: startOfMonth(m), windowEnd: endOfMonth(m), months: 1, anchor: m }
+    }
+    return {
+      windowStart: startOfMonth(subMonths(now, cfg.months - 1)),
+      windowEnd: endOfMonth(now),
+      months: cfg.months,
+      anchor: now,
+    }
+  }, [range, now])
 
   // Apply the date range + account filter once for the whole page.
   const filtered = useMemo(() => {
-    const start = startOfMonth(subMonths(now, months - 1))
     return transactions.filter((t) => {
-      if (parseISO(t.date) < start) return false
+      const d = parseISO(t.date)
+      if (d < windowStart || d > windowEnd) return false
       if (accountIds.size > 0 && !accountIds.has(t.account_id)) return false
       return true
     })
-  }, [transactions, accountIds, months, now])
+  }, [transactions, accountIds, windowStart, windowEnd])
 
   const sankey = useMemo(() => buildSankey(filtered), [filtered])
 
   const barData = useMemo<IncomeExpenseMonth[]>(() => {
-    const inc = groupByMonth(filtered, months, incomeAmount, now)
-    const exp = groupByMonth(filtered, months, expenseAmount, now)
-    return inc.map((b, i) => ({ month: b.month, label: b.label, income: b.value, spending: exp[i].value }))
-  }, [filtered, months, now])
+    const inc = groupByMonth(filtered, months, incomeAmount, anchor)
+    const exp = groupByMonth(filtered, months, expenseAmount, anchor)
+    return inc.map((b, i) => ({
+      month: b.month,
+      label: b.label,
+      income: b.value,
+      spending: exp[i].value,
+      net: b.value - exp[i].value,
+    }))
+  }, [filtered, months, anchor])
 
-  const stacked = useMemo(() => stackedSpendingByMonth(filtered, months, 6, now), [filtered, months, now])
+  const stacked = useMemo(() => stackedSpendingByMonth(filtered, months, 6, anchor), [filtered, months, anchor])
+
+  const incomeCats = useMemo(() => groupByCategory(filtered, 'income'), [filtered])
+  const expenseCats = useMemo(() => groupByCategory(filtered, 'expense'), [filtered])
 
   const { hidden } = usePrivacy()
   const chartRef = useRef<HTMLDivElement>(null)
@@ -77,6 +106,17 @@ export function ReportsPage({ user }: ReportsPageProps) {
         ? expenseTotal
         : incomeTotal + expenseTotal
   const formatValue = (v: number) => formatAmount(v, { hidden, total: chartTotal })
+
+  // How many viewport-width sections the chart spans on mobile (drives the swipe
+  // carousel + dot pagination). Wide charts get 2 pages, compact ones stay single.
+  const chartPages =
+    chart === 'sankey'
+      ? sankey.nodes.length > 5
+        ? 2
+        : 1
+      : months > 6
+        ? 2
+        : 1
 
   function toggleAccount(id: string) {
     setAccountIds((prev) => {
@@ -205,12 +245,23 @@ export function ReportsPage({ user }: ReportsPageProps) {
       </div>
 
       <Card ref={chartRef}>
-        {chart === 'sankey' && <SankeyReport data={sankey} formatValue={formatValue} />}
-        {chart === 'bar' && <BarReport data={barData} formatValue={formatValue} />}
-        {chart === 'stacked' && (
-          <StackedBarReport rows={stacked.rows} categories={stacked.categories} formatValue={formatValue} />
-        )}
+        <ChartCarousel pages={chartPages}>
+          {chart === 'sankey' && <SankeyReport data={sankey} formatValue={formatValue} />}
+          {chart === 'bar' && <BarReport data={barData} formatValue={formatValue} />}
+          {chart === 'stacked' && (
+            <StackedBarReport rows={stacked.rows} categories={stacked.categories} formatValue={formatValue} />
+          )}
+        </ChartCarousel>
       </Card>
+
+      <ReportSummary
+        chart={chart}
+        incomeTotal={incomeTotal}
+        expenseTotal={expenseTotal}
+        incomeCats={incomeCats}
+        expenseCats={expenseCats}
+        formatValue={formatValue}
+      />
     </div>
   )
 }
