@@ -4,7 +4,7 @@
 // Uses Plaid's /transactions/sync cursor model for incremental, idempotent
 // pulls. Investment/loan accounts are balance-only (transactions/sync simply
 // returns no rows for them in this phase).
-import { corsHeaders, json } from '../_shared/cors.ts'
+import { http } from '../_shared/cors.ts'
 import { getUser, serviceClient } from '../_shared/auth.ts'
 import {
   plaidClient,
@@ -26,7 +26,8 @@ interface SyncSummary {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  const { json, preflight } = http(req)
+  if (req.method === 'OPTIONS') return preflight()
 
   const user = await getUser(req)
   if (!user) return json({ error: 'Unauthorized' }, 401)

@@ -25,7 +25,7 @@ Enable Google OAuth in Supabase Dashboard → Authentication → Providers → G
 
 **Plaid Edge Functions** (bank sync): set server-only secrets (never `VITE_`-prefixed, never in the browser bundle) — see `supabase/functions/.env.example`:
 ```
-supabase secrets set PLAID_CLIENT_ID=… PLAID_SECRET=… PLAID_ENV=sandbox
+supabase secrets set PLAID_CLIENT_ID=… PLAID_SECRET=… PLAID_ENV=sandbox ALLOWED_ORIGINS=https://your-app.example,http://localhost:5173
 supabase functions deploy plaid-link-token plaid-exchange plaid-sync plaid-items plaid-remove
 ```
 

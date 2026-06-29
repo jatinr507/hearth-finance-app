@@ -2,11 +2,12 @@
 // so the client can show connection health / reconnect prompts. The plaid_items
 // table itself is unreadable by the client (RLS has no policies); this function
 // is the only safe window onto it.
-import { corsHeaders, json } from '../_shared/cors.ts'
+import { http } from '../_shared/cors.ts'
 import { getUser, serviceClient } from '../_shared/auth.ts'
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  const { json, preflight } = http(req)
+  if (req.method === 'OPTIONS') return preflight()
 
   const user = await getUser(req)
   if (!user) return json({ error: 'Unauthorized' }, 401)
