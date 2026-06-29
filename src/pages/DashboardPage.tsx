@@ -204,7 +204,7 @@ export function DashboardPage({ user }: DashboardPageProps) {
                   </defs>
                   <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#9A8E79' }} axisLine={false} tickLine={false} />
                   <Tooltip
-                    formatter={(v: number) => [formatCurrency(v), 'Net Worth']}
+                    formatter={(v) => [formatCurrency(v as number), 'Net Worth']}
                     labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? ''}
                     contentStyle={{ fontSize: 12, borderRadius: 12, border: '1px solid #3A332B', backgroundColor: '#29241E', color: '#F2EBDD' }}
                   />
@@ -268,7 +268,7 @@ export function DashboardPage({ user }: DashboardPageProps) {
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#8A7F6D' }} axisLine={false} tickLine={false} />
                 <YAxis hide />
                 <Tooltip
-                  formatter={(v: number) => [formatCurrency(v), 'Spending']}
+                  formatter={(v) => [formatCurrency(v as number), 'Spending']}
                   contentStyle={{ fontSize: 12, borderRadius: 12, border: '1px solid #E2D9CA', boxShadow: '0 4px 12px rgba(43,38,32,0.08)', backgroundColor: '#FBF8F2' }}
                 />
                 <Bar dataKey="total" radius={[4, 4, 0, 0]}>

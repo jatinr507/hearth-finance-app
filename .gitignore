@@ -33,3 +33,4 @@ client_secret*.json
 
 # Claude Code local config
 .claude/
+.vercel
