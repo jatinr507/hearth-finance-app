@@ -168,6 +168,8 @@ function toRow(
     source: 'plaid' as const,
     plaid_transaction_id: t.transaction_id,
     pending: t.pending ?? false,
+    // Plaid: positive amount = money out (outflow), negative = money in (inflow).
+    direction: type === 'credit' ? 'inflow' : 'outflow',
     notes: null,
   }
 }

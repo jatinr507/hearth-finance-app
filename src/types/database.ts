@@ -1,5 +1,6 @@
 export type AccountType = 'checking' | 'savings' | 'credit' | 'investment' | 'loan'
 export type TransactionSource = 'csv' | 'manual' | 'plaid'
+export type TransactionDirection = 'inflow' | 'outflow'
 
 export type PlaidItemStatus = 'good' | 'login_required' | 'error'
 
@@ -49,6 +50,7 @@ export type Transaction = {
   source: TransactionSource
   plaid_transaction_id: string | null
   pending: boolean
+  direction: TransactionDirection | null
   notes: string | null
   created_at: string
   account?: Account
@@ -96,8 +98,8 @@ export interface Database {
       transactions: {
         Row: Transaction
         // plaid_transaction_id / pending have DB defaults → optional on insert.
-        Insert: Omit<Transaction, 'id' | 'created_at' | 'account' | 'category' | 'plaid_transaction_id' | 'pending'> &
-          Partial<Pick<Transaction, 'plaid_transaction_id' | 'pending'>>
+        Insert: Omit<Transaction, 'id' | 'created_at' | 'account' | 'category' | 'plaid_transaction_id' | 'pending' | 'direction'> &
+          Partial<Pick<Transaction, 'plaid_transaction_id' | 'pending' | 'direction'>>
         Update: Partial<Omit<Transaction, 'id' | 'user_id' | 'created_at' | 'account' | 'category'>>
         Relationships: []
       }
