@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { Plus, CreditCard, Building2, PiggyBank, TrendingUp, Trash2, Pencil } from 'lucide-react'
+import { Plus, CreditCard, Building2, PiggyBank, TrendingUp, Trash2, Pencil, Link2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { formatCurrency } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { useAccounts } from '@/hooks/useAccounts'
+import { usePlaidConnect } from '@/hooks/usePlaidConnect'
 import type { User } from '@supabase/supabase-js'
 import type { Account, AccountType } from '@/types/database'
 
@@ -33,6 +34,7 @@ const selectCls = 'bg-sand border border-hairline rounded-sm px-3 py-2.5 text-sm
 
 export function AccountsPage({ user }: AccountsPageProps) {
   const { accounts, loading, refetch } = useAccounts(user.id)
+  const { link, loading: linking, error: linkError } = usePlaidConnect({ onLinked: refetch })
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ name: '', institution: '', type: 'checking' as AccountType, balance: '' })
@@ -103,13 +105,23 @@ export function AccountsPage({ user }: AccountsPageProps) {
 
   return (
     <div className="pb-24 lg:pb-10 px-4 lg:px-8 pt-6 lg:pt-8 space-y-4 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-bold text-ink">Accounts</h1>
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>
-          <Plus className="w-4 h-4" />
-          Add
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" onClick={link} disabled={linking}>
+            <Link2 className="w-4 h-4" />
+            {linking ? 'Linking…' : 'Link a bank'}
+          </Button>
+          <Button size="sm" variant="secondary" onClick={() => setShowForm(!showForm)}>
+            <Plus className="w-4 h-4" />
+            Add
+          </Button>
+        </div>
       </div>
+
+      {linkError && (
+        <p className="text-xs text-rust">{linkError}</p>
+      )}
 
       {/* Net worth hero card */}
       <Card className="bg-ink border-0 rounded-lg">
@@ -178,24 +190,36 @@ export function AccountsPage({ user }: AccountsPageProps) {
                   {ACCOUNT_ICONS[acc.type]}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-ink">{acc.name}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-medium text-ink truncate">{acc.name}</p>
+                    {!acc.is_manual && (
+                      <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold bg-tint-sage text-tint-sage-ink px-1.5 py-0.5 rounded-pill">
+                        <Link2 className="w-2.5 h-2.5" />
+                        Synced
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-muted capitalize">{acc.institution} · {acc.type}</p>
                 </div>
                 <p className={`text-sm font-semibold amount ${acc.type === 'credit' || acc.type === 'loan' ? 'text-rust' : 'text-ink'}`}>
                   {formatCurrency(acc.balance)}
                 </p>
-                <button
-                  onClick={() => handleStartEdit(acc)}
-                  className="text-muted/60 hover:text-clay transition-colors p-1"
-                >
-                  <Pencil className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => handleDelete(acc.id)}
-                  className="text-muted/60 hover:text-rust transition-colors p-1"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {acc.is_manual && (
+                  <>
+                    <button
+                      onClick={() => handleStartEdit(acc)}
+                      className="text-muted/60 hover:text-clay transition-colors p-1"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(acc.id)}
+                      className="text-muted/60 hover:text-rust transition-colors p-1"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
               </Card>
 
               {editingId === acc.id && (

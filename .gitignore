@@ -27,6 +27,8 @@ dist-ssr
 
 # Sensitive credentials
 client_secret*.json
+supabase/functions/.env
+supabase/.env
 
 # Design assets (not source code)
 *.zip
