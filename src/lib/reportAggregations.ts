@@ -10,6 +10,7 @@ export interface CategoryTotal {
   id: string
   name: string
   color: string
+  icon: string
   total: number
 }
 
@@ -26,7 +27,7 @@ export function groupByCategory(
     .filter((t) => txnKind(t) === kind && t.category)
     .forEach((t) => {
       const cat = t.category!
-      const existing = map.get(cat.id) ?? { id: cat.id, name: cat.name, color: cat.color, total: 0 }
+      const existing = map.get(cat.id) ?? { id: cat.id, name: cat.name, color: cat.color, icon: cat.icon, total: 0 }
       existing.total += amountOf(t)
       map.set(cat.id, existing)
     })
@@ -111,9 +112,20 @@ export function stackedSpendingByMonth(
   return { rows, categories }
 }
 
+export interface SankeyNodeDatum {
+  name: string
+  color?: string
+  icon?: string
+  // 'income' | 'expense' | 'cash' — lets the renderer pick the right side total.
+  side?: 'income' | 'expense' | 'cash'
+}
+
 export interface SankeyData {
-  nodes: { name: string; color?: string }[]
+  nodes: SankeyNodeDatum[]
   links: { source: number; target: number; value: number }[]
+  // Side totals so node labels can show each flow as a % of its side.
+  incomeTotal: number
+  expenseTotal: number
 }
 
 // Cash-flow Sankey: income-source categories → a central "Cash" node →
@@ -122,23 +134,26 @@ export function buildSankey(txns: Transaction[]): SankeyData {
   const income = groupByCategory(txns, 'income')
   const expense = groupByCategory(txns, 'expense')
   if (income.length === 0 && expense.length === 0) {
-    return { nodes: [], links: [] }
+    return { nodes: [], links: [], incomeTotal: 0, expenseTotal: 0 }
   }
 
-  const nodes: { name: string; color?: string }[] = []
+  const nodes: SankeyNodeDatum[] = []
   const links: { source: number; target: number; value: number }[] = []
 
   // Central node first so its index is stable.
-  const cashIndex = nodes.push({ name: 'Cash', color: '#BE6E46' }) - 1
+  const cashIndex = nodes.push({ name: 'Cash', color: '#BE6E46', side: 'cash' }) - 1
 
   income.forEach((c) => {
-    const idx = nodes.push({ name: c.name, color: c.color }) - 1
+    const idx = nodes.push({ name: c.name, color: c.color, icon: c.icon, side: 'income' }) - 1
     links.push({ source: idx, target: cashIndex, value: c.total })
   })
   expense.forEach((c) => {
-    const idx = nodes.push({ name: c.name, color: c.color }) - 1
+    const idx = nodes.push({ name: c.name, color: c.color, icon: c.icon, side: 'expense' }) - 1
     links.push({ source: cashIndex, target: idx, value: c.total })
   })
 
-  return { nodes, links }
+  const incomeTotal = income.reduce((s, c) => s + c.total, 0)
+  const expenseTotal = expense.reduce((s, c) => s + c.total, 0)
+
+  return { nodes, links, incomeTotal, expenseTotal }
 }
