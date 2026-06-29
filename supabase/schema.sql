@@ -1,6 +1,21 @@
 -- Enable UUID generation
 create extension if not exists "pgcrypto";
 
+-- Plaid Items (one per linked institution login). Holds the access_token.
+-- SECURITY: RLS enabled with NO policies — clients can never read a row; only
+-- Edge Functions using the service-role key (which bypasses RLS) touch this.
+create table if not exists public.plaid_items (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  item_id text not null unique,
+  access_token text not null,
+  institution_name text,
+  cursor text,
+  status text not null default 'good' check (status in ('good', 'login_required', 'error')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 -- Accounts
 create table if not exists public.accounts (
   id uuid primary key default gen_random_uuid(),
@@ -9,9 +24,16 @@ create table if not exists public.accounts (
   type text not null check (type in ('checking', 'savings', 'credit', 'investment', 'loan')),
   institution text not null,
   balance numeric(12, 2) not null default 0,
+  plaid_item_id uuid references public.plaid_items(id) on delete set null,
+  plaid_account_id text,
+  is_manual boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+create unique index if not exists accounts_plaid_account
+  on public.accounts(user_id, plaid_account_id)
+  where plaid_account_id is not null;
 
 -- System categories (shared, no user_id)
 create table if not exists public.categories (
@@ -62,6 +84,8 @@ create table if not exists public.transactions (
   amount numeric(12, 2) not null,
   category_id uuid references public.categories(id) on delete set null,
   source text not null check (source in ('csv', 'manual', 'plaid')) default 'csv',
+  plaid_transaction_id text,
+  pending boolean not null default false,
   notes text,
   created_at timestamptz not null default now(),
   -- Prevent duplicate imports from CSV
@@ -72,7 +96,14 @@ create table if not exists public.transactions (
 create index if not exists transactions_user_date on public.transactions(user_id, date desc);
 create index if not exists transactions_account on public.transactions(account_id);
 
+-- Stable dedup/update key for Plaid-sourced rows (survives pending -> posted).
+create unique index if not exists transactions_plaid_txn
+  on public.transactions(user_id, plaid_transaction_id)
+  where plaid_transaction_id is not null;
+
 -- Row Level Security
+-- plaid_items: RLS on, NO policies — clients get zero rows; service role bypasses.
+alter table public.plaid_items enable row level security;
 alter table public.accounts enable row level security;
 alter table public.categories enable row level security;
 alter table public.category_rules enable row level security;
