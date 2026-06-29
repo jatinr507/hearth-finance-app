@@ -6,6 +6,7 @@ import { LoginPage } from '@/pages/LoginPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { TransactionsPage } from '@/pages/TransactionsPage'
 import { ImportPage } from '@/pages/ImportPage'
+import { ReportsPage } from '@/pages/ReportsPage'
 import { AccountsPage } from '@/pages/AccountsPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 
@@ -33,6 +34,7 @@ export default function App() {
             <Route path="/" element={<DashboardPage user={user} />} />
             <Route path="/transactions" element={<TransactionsPage user={user} />} />
             <Route path="/import" element={<ImportPage user={user} />} />
+            <Route path="/reports" element={<ReportsPage user={user} />} />
             <Route path="/accounts" element={<AccountsPage user={user} />} />
             <Route path="/settings" element={<SettingsPage user={user} />} />
           </Routes>
