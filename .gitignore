@@ -36,3 +36,6 @@ supabase/.env
 # Claude Code local config
 .claude/
 .vercel
+
+# Supabase CLI local state
+supabase/.temp/
