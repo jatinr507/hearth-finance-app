@@ -5,10 +5,14 @@
 // We echo back the request's Origin only when it's on the list, so multiple
 // origins (prod + local dev) work while everything else is denied. Falls back to
 // the first configured origin for non-browser callers (no Origin header).
-const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') ?? 'http://localhost:5173')
+const DEFAULT_ORIGIN = 'http://localhost:5173'
+const PARSED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') ?? DEFAULT_ORIGIN)
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean)
+// Guard against an empty/whitespace ALLOWED_ORIGINS leaving the list empty,
+// which would make the fallback origin `undefined` and break the CORS header.
+const ALLOWED_ORIGINS = PARSED_ORIGINS.length > 0 ? PARSED_ORIGINS : [DEFAULT_ORIGIN]
 
 function corsHeaders(origin: string | null): Record<string, string> {
   const allowed = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0]
