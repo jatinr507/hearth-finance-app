@@ -2,7 +2,7 @@
 // and upserts one app account per Plaid account.
 // POST body: { public_token: string }
 import { CountryCode } from 'npm:plaid@27'
-import { corsHeaders, json } from '../_shared/cors.ts'
+import { http } from '../_shared/cors.ts'
 import { getUser, serviceClient } from '../_shared/auth.ts'
 import {
   plaidClient,
@@ -12,7 +12,8 @@ import {
 } from '../_shared/plaid.ts'
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  const { json, preflight } = http(req)
+  if (req.method === 'OPTIONS') return preflight()
 
   const user = await getUser(req)
   if (!user) return json({ error: 'Unauthorized' }, 401)

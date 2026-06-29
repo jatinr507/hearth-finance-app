@@ -2,12 +2,13 @@
 // manual (preserving history by default), and deletes the stored access_token.
 // POST body: { item_id: string, purge?: boolean }
 //   purge=true also deletes the synced transactions for the item's accounts.
-import { corsHeaders, json } from '../_shared/cors.ts'
+import { http } from '../_shared/cors.ts'
 import { getUser, serviceClient } from '../_shared/auth.ts'
 import { plaidClient, plaidErrorInfo } from '../_shared/plaid.ts'
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  const { json, preflight } = http(req)
+  if (req.method === 'OPTIONS') return preflight()
 
   const user = await getUser(req)
   if (!user) return json({ error: 'Unauthorized' }, 401)
