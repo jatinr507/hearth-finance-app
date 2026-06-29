@@ -51,27 +51,30 @@ create table if not exists public.categories (
   color text not null default '#6366f1',
   icon text not null default '📦',
   is_income boolean not null default false,
+  -- Transfer-type categories (account-to-account, credit-card payments) are
+  -- shown but excluded from income/expense/cash-flow totals.
+  is_transfer boolean not null default false,
   is_system boolean not null default false
 );
 
 -- Default system categories
-insert into public.categories (name, color, icon, is_income, is_system) values
-  ('Income', '#22c55e', '💰', true, true),
-  ('Paycheck', '#16a34a', '💵', true, true),
-  ('Transfer', '#64748b', '↔️', false, true),
-  ('Food & Dining', '#f97316', '🍔', false, true),
-  ('Groceries', '#84cc16', '🛒', false, true),
-  ('Shopping', '#ec4899', '🛍️', false, true),
-  ('Gas & Fuel', '#f59e0b', '⛽', false, true),
-  ('Travel', '#06b6d4', '✈️', false, true),
-  ('Entertainment', '#a855f7', '🎬', false, true),
-  ('Subscriptions', '#8b5cf6', '📱', false, true),
-  ('Utilities', '#0ea5e9', '💡', false, true),
-  ('Healthcare', '#ef4444', '🏥', false, true),
-  ('Insurance', '#64748b', '🛡️', false, true),
-  ('Rent & Mortgage', '#1d4ed8', '🏠', false, true),
-  ('Credit Card Payment', '#64748b', '💳', false, true),
-  ('Other', '#94a3b8', '📦', false, true)
+insert into public.categories (name, color, icon, is_income, is_transfer, is_system) values
+  ('Income', '#22c55e', '💰', true, false, true),
+  ('Paycheck', '#16a34a', '💵', true, false, true),
+  ('Transfer', '#64748b', '↔️', false, true, true),
+  ('Food & Dining', '#f97316', '🍔', false, false, true),
+  ('Groceries', '#84cc16', '🛒', false, false, true),
+  ('Shopping', '#ec4899', '🛍️', false, false, true),
+  ('Gas & Fuel', '#f59e0b', '⛽', false, false, true),
+  ('Travel', '#06b6d4', '✈️', false, false, true),
+  ('Entertainment', '#a855f7', '🎬', false, false, true),
+  ('Subscriptions', '#8b5cf6', '📱', false, false, true),
+  ('Utilities', '#0ea5e9', '💡', false, false, true),
+  ('Healthcare', '#ef4444', '🏥', false, false, true),
+  ('Insurance', '#64748b', '🛡️', false, false, true),
+  ('Rent & Mortgage', '#1d4ed8', '🏠', false, false, true),
+  ('Credit Card Payment', '#64748b', '💳', false, true, true),
+  ('Other', '#94a3b8', '📦', false, false, true)
 on conflict do nothing;
 
 -- Category auto-assign rules

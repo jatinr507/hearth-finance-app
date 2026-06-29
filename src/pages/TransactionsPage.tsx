@@ -5,6 +5,7 @@ import { TransactionCategorySheet } from '@/components/TransactionCategorySheet'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useTransactions } from '@/hooks/useTransactions'
 import { isInflow } from '@/lib/txnDirection'
+import { txnKind } from '@/lib/txnClassify'
 import type { User } from '@supabase/supabase-js'
 import type { Transaction } from '@/types/database'
 
@@ -21,11 +22,11 @@ export function TransactionsPage({ user }: TransactionsPageProps) {
   const filtered = useMemo(() => {
     return transactions.filter((t) => {
       const matchesSearch = t.description.toLowerCase().includes(search.toLowerCase())
-      const inflow = isInflow(t)
+      const kind = txnKind(t)
       const matchesType =
         filterType === 'all' ||
-        (filterType === 'income' && inflow) ||
-        (filterType === 'expense' && !inflow)
+        (filterType === 'income' && kind === 'income') ||
+        (filterType === 'expense' && kind === 'expense')
       return matchesSearch && matchesType
     })
   }, [transactions, search, filterType])

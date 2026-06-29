@@ -12,7 +12,7 @@ export function useTransactions(userId: string | undefined) {
     setLoading(true)
     const { data, error } = await supabase
       .from('transactions')
-      .select('*, account:accounts(id,name,institution,type), category:categories(id,name,color,icon,is_income)')
+      .select('*, account:accounts(id,name,institution,type), category:categories(id,name,color,icon,is_income,is_transfer)')
       .eq('user_id', userId)
       .order('date', { ascending: false })
       .limit(500)
