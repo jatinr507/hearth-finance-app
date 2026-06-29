@@ -279,9 +279,18 @@ export function AccountsPage({ user }: AccountsPageProps) {
 
       {/* Account list */}
       {accounts.length === 0 ? (
-        <div className="text-center py-12 text-muted">
-          <p className="text-lg">No accounts yet</p>
-          <p className="text-sm mt-1">Add an account to get started</p>
+        <div className="text-center py-12 space-y-4">
+          <div className="text-muted">
+            <p className="text-lg">No accounts yet</p>
+            <p className="text-sm mt-1">Connect your bank to import balances and transactions automatically.</p>
+          </div>
+          <Button onClick={link} disabled={linking}>
+            <Link2 className="w-4 h-4" />
+            {linking ? 'Linking…' : 'Connect your bank'}
+          </Button>
+          <p className="text-xs text-muted">
+            Prefer to do it manually? Use <span className="font-medium">Add</span> above, or import a CSV.
+          </p>
         </div>
       ) : (
         <div className="grid gap-2 lg:grid-cols-2">

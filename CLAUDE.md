@@ -19,9 +19,15 @@ VITE_SUPABASE_URL=https://your-project-id.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
 ```
 
-Run `supabase/schema.sql` in the Supabase SQL editor to create tables, RLS policies, and seed default categories.
+Run `supabase/schema.sql` in the Supabase SQL editor to create tables, RLS policies, and seed default categories. For an existing project, apply `supabase/migrations/0002_plaid.sql` to add Plaid support.
 
 Enable Google OAuth in Supabase Dashboard → Authentication → Providers → Google.
+
+**Plaid Edge Functions** (bank sync): set server-only secrets (never `VITE_`-prefixed, never in the browser bundle) — see `supabase/functions/.env.example`:
+```
+supabase secrets set PLAID_CLIENT_ID=… PLAID_SECRET=… PLAID_ENV=sandbox
+supabase functions deploy plaid-link-token plaid-exchange plaid-sync plaid-items plaid-remove
+```
 
 ## Architecture
 
@@ -68,6 +74,21 @@ Enable Google OAuth in Supabase Dashboard → Authentication → Providers → G
 - Use `.maybeSingle()` (not `.single()`) when fetching optional system categories to avoid errors when a category is missing
 - Do not reference specific bank names (e.g. Chase, Capital One, PNC) in any user-facing content
 
-## Planned V2
+## Bank sync (Plaid)
 
-Bank sync integration via Plaid — store `access_token` server-side via Supabase Edge Functions, use webhooks for new transactions.
+Automatic account linking + transaction sync, alongside the manual CSV/account flows (kept as fallbacks).
+
+**Security model:** Plaid `access_token`s live only in the `plaid_items` table, which has RLS enabled with **no policies** — the browser can never read it. Only Edge Functions using the **service-role key** touch it. The client only handles short-lived Plaid link/public tokens. Every function derives `user_id` from the verified Supabase JWT, never from the request body.
+
+**Edge Functions** (`supabase/functions/`, Deno; all Plaid SDK usage isolated to `_shared/plaid.ts` so the provider can be swapped):
+- `plaid-link-token` — creates a Link token; pass `item_id` for update-mode (reconnect)
+- `plaid-exchange` — exchanges public token, stores the item, upserts one account per Plaid account (`is_manual=false`)
+- `plaid-sync` — incremental `/transactions/sync` (cursor model), idempotent upsert on `plaid_transaction_id`, refreshes balances; sets item `status` to `login_required`/`error` on failure
+- `plaid-items` — lists the user's items **without** `access_token` (the client's only window onto `plaid_items`, for connection-health UI)
+- `plaid-remove` — revokes at Plaid, converts accounts back to manual, optional transaction purge, deletes the token
+
+**Account-type coverage:** depository + credit get full transaction sync; investment/loan are **balance-only** (no holdings yet). **Categorization:** Plaid sync assigns categories via `src/lib/plaidCategoryMap.ts` precedence — user `category_rules` → Plaid `personal_finance_category` → Income default for credits → null. CSV import shares `assignCategory` (`src/lib/categorize.ts`).
+
+**Cross-source dedup:** Plaid rows dedup on `plaid_transaction_id`; CSV/manual rows on the composite `(user_id, account_id, date, description, amount)` constraint. Plaid accounts always get fresh `account_id`s, so the two never collide on the composite key — but if you both CSV-import *and* Plaid-link the same real-world account, transactions appear once per source (not merged). Avoid linking a bank for an account you already import via CSV.
+
+**Sync trigger:** manual "Sync now" button on Accounts. Webhook/cron auto-sync is a future enhancement.
