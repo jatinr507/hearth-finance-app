@@ -3,6 +3,13 @@
 // Edge Functions can import it directly.
 import type { CategoryRuleLike } from './categorize'
 
+// Plaid PFC *detailed* -> our system category name. Checked before the primary
+// map so finer-grained signals win (e.g. a payroll deposit is INCOME / INCOME_WAGES
+// and should land in 'Paycheck', not the generic 'Income' bucket).
+const PFC_DETAILED_TO_CATEGORY: Record<string, string> = {
+  INCOME_WAGES: 'Paycheck',
+}
+
 // Plaid PFC primary -> our system category name. Unmapped primaries fall through
 // to the income/null default in resolvePlaidCategory.
 const PFC_TO_CATEGORY: Record<string, string> = {
@@ -24,8 +31,17 @@ const PFC_TO_CATEGORY: Record<string, string> = {
   RENT_AND_UTILITIES: 'Utilities',
 }
 
-/** Map a Plaid PFC primary to a system category name, or null if unmapped. */
-export function mapPlaidCategory(pfcPrimary: string | null | undefined): string | null {
+/**
+ * Map Plaid PFC values to a system category name, or null if unmapped.
+ * The detailed value (when mapped) wins over the primary.
+ */
+export function mapPlaidCategory(
+  pfcPrimary: string | null | undefined,
+  pfcDetailed?: string | null | undefined,
+): string | null {
+  if (pfcDetailed && PFC_DETAILED_TO_CATEGORY[pfcDetailed]) {
+    return PFC_DETAILED_TO_CATEGORY[pfcDetailed]
+  }
   if (!pfcPrimary) return null
   return PFC_TO_CATEGORY[pfcPrimary] ?? null
 }
@@ -41,6 +57,7 @@ export function resolvePlaidCategory(
   rules: CategoryRuleLike[],
   categoryIdByName: Map<string, string>,
   incomeCategoryId: string | null,
+  pfcDetailed?: string | null | undefined,
 ): string | null {
   const desc = description.toLowerCase()
 
@@ -48,8 +65,8 @@ export function resolvePlaidCategory(
   const rule = rules.find((r) => desc.includes(r.pattern.toLowerCase()))
   if (rule) return rule.category_id
 
-  // 2. Plaid's personal finance category.
-  const name = mapPlaidCategory(pfcPrimary)
+  // 2. Plaid's personal finance category (detailed wins over primary).
+  const name = mapPlaidCategory(pfcPrimary, pfcDetailed)
   if (name) {
     const id = categoryIdByName.get(name)
     if (id) return id

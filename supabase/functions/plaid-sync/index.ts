@@ -157,6 +157,7 @@ function toRow(
   const type: 'debit' | 'credit' = t.amount > 0 ? 'debit' : 'credit'
   const description = t.name ?? t.merchant_name ?? 'Transaction'
   const pfcPrimary = t.personal_finance_category?.primary ?? null
+  const pfcDetailed = t.personal_finance_category?.detailed ?? null
 
   return {
     user_id: userId,
@@ -164,7 +165,7 @@ function toRow(
     date: t.date, // YYYY-MM-DD
     description,
     amount: Math.abs(t.amount),
-    category_id: resolvePlaidCategory(description, type, pfcPrimary, rules, categoryIdByName, incomeCategoryId),
+    category_id: resolvePlaidCategory(description, type, pfcPrimary, rules, categoryIdByName, incomeCategoryId, pfcDetailed),
     source: 'plaid' as const,
     plaid_transaction_id: t.transaction_id,
     pending: t.pending ?? false,
