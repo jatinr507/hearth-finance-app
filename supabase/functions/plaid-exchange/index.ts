@@ -8,6 +8,7 @@ import {
   plaidClient,
   mapAccountType,
   accountBalance,
+  plaidErrorInfo,
 } from '../_shared/plaid.ts'
 
 Deno.serve(async (req) => {
@@ -150,7 +151,7 @@ Deno.serve(async (req) => {
       accounts: [...reattached, ...inserted],
     })
   } catch (e) {
-    console.error('exchange failed', e)
+    console.error('exchange failed:', plaidErrorInfo(e))
     return json({ error: 'Failed to link account' }, 500)
   }
 })

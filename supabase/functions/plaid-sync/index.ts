@@ -6,7 +6,13 @@
 // returns no rows for them in this phase).
 import { corsHeaders, json } from '../_shared/cors.ts'
 import { getUser, serviceClient } from '../_shared/auth.ts'
-import { plaidClient, accountBalance } from '../_shared/plaid.ts'
+import {
+  plaidClient,
+  accountBalance,
+  plaidErrorCode,
+  plaidErrorInfo,
+  RECONNECT_ERROR_CODES,
+} from '../_shared/plaid.ts'
 import type { CategoryRuleLike } from '../../../src/lib/categorize.ts'
 import { resolvePlaidCategory } from '../../../src/lib/plaidCategoryMap.ts'
 import type { Transaction as PlaidTxn } from 'npm:plaid@27'
@@ -131,10 +137,22 @@ Deno.serve(async (req) => {
 
       summaries.push({ item_id: item.item_id, added, modified, removed, status: 'good' })
     } catch (e) {
-      const status = isLoginRequired(e) ? 'login_required' : 'error'
-      await svc.from('plaid_items').update({ status }).eq('id', item.id)
-      console.error(`sync failed for item ${item.item_id}`, e)
-      summaries.push({ item_id: item.item_id, added: 0, modified: 0, removed: 0, status })
+      const code = plaidErrorCode(e)
+      const needsReconnect = code !== null && RECONNECT_ERROR_CODES.has(code)
+      // Only persist a reconnect-requiring status. Transient errors (institution
+      // down, rate limit, maintenance) leave the item 'good' so we don't nag the
+      // user with a false "Reconnect" — the next sync simply retries.
+      if (needsReconnect) {
+        await svc.from('plaid_items').update({ status: 'login_required' }).eq('id', item.id)
+      }
+      console.error(`sync failed for item ${item.item_id}: ${plaidErrorInfo(e)}`)
+      summaries.push({
+        item_id: item.item_id,
+        added: 0,
+        modified: 0,
+        removed: 0,
+        status: needsReconnect ? 'login_required' : 'error',
+      })
     }
   }
 
@@ -173,9 +191,4 @@ function toRow(
     direction: type === 'credit' ? 'inflow' : 'outflow',
     notes: null,
   }
-}
-
-// deno-lint-ignore no-explicit-any
-function isLoginRequired(e: any): boolean {
-  return e?.response?.data?.error_code === 'ITEM_LOGIN_REQUIRED'
 }

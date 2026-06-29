@@ -84,11 +84,14 @@ export function AccountsPage({ user }: AccountsPageProps) {
       const results = await syncTransactions()
       const added = results.reduce((n, r) => n + r.added, 0)
       const needsAuth = results.some((r) => r.status === 'login_required')
+      const failed = results.some((r) => r.status === 'error')
       await refreshAll()
       setSyncMsg(
         needsAuth
           ? 'Some accounts need reconnecting.'
-          : `Synced — ${added} new transaction${added === 1 ? '' : 's'}.`,
+          : failed
+            ? `Synced ${added} new, but some accounts couldn't be reached. Try again shortly.`
+            : `Synced — ${added} new transaction${added === 1 ? '' : 's'}.`,
       )
     } catch (e) {
       setSyncMsg(e instanceof Error ? e.message : 'Sync failed.')
