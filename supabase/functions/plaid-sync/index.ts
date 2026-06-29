@@ -7,7 +7,8 @@
 import { corsHeaders, json } from '../_shared/cors.ts'
 import { getUser, serviceClient } from '../_shared/auth.ts'
 import { plaidClient, accountBalance } from '../_shared/plaid.ts'
-import { assignCategory, type CategoryRuleLike } from '../../../src/lib/categorize.ts'
+import type { CategoryRuleLike } from '../../../src/lib/categorize.ts'
+import { resolvePlaidCategory } from '../../../src/lib/plaidCategoryMap.ts'
 import type { Transaction as PlaidTxn } from 'npm:plaid@27'
 
 interface SyncSummary {
@@ -39,13 +40,17 @@ Deno.serve(async (req) => {
   }
   if (!items || items.length === 0) return json({ items: [] })
 
-  // Category assignment context (shared with CSV import).
-  const [{ data: rulesData }, { data: incomeCategory }] = await Promise.all([
+  // Category assignment context. Load the user's rules plus every category they
+  // can see (system + own) so Plaid PFC names can be resolved to ids.
+  const [{ data: rulesData }, { data: cats }] = await Promise.all([
     svc.from('category_rules').select('pattern, category_id').eq('user_id', user.id),
-    svc.from('categories').select('id').eq('name', 'Income').eq('is_system', true).maybeSingle(),
+    svc.from('categories').select('id, name').or(`user_id.is.null,user_id.eq.${user.id}`),
   ])
   const rules: CategoryRuleLike[] = rulesData ?? []
-  const incomeCategoryId: string | null = incomeCategory?.id ?? null
+  const categoryIdByName = new Map<string, string>(
+    (cats ?? []).map((c) => [c.name as string, c.id as string]),
+  )
+  const incomeCategoryId: string | null = categoryIdByName.get('Income') ?? null
 
   const summaries: SyncSummary[] = []
 
@@ -73,11 +78,12 @@ Deno.serve(async (req) => {
         const resp = await plaid.transactionsSync({
           access_token: item.access_token,
           cursor,
+          options: { include_personal_finance_category: true },
         })
         const d = resp.data
 
         const upserts = [...d.added, ...d.modified]
-          .map((t) => toRow(t, user.id, acctMap, rules, incomeCategoryId))
+          .map((t) => toRow(t, user.id, acctMap, rules, categoryIdByName, incomeCategoryId))
           .filter((r): r is NonNullable<typeof r> => r !== null)
 
         if (upserts.length > 0) {
@@ -142,6 +148,7 @@ function toRow(
   userId: string,
   acctMap: Map<string, string>,
   rules: CategoryRuleLike[],
+  categoryIdByName: Map<string, string>,
   incomeCategoryId: string | null,
 ) {
   const accountId = acctMap.get(t.account_id)
@@ -149,6 +156,7 @@ function toRow(
 
   const type: 'debit' | 'credit' = t.amount > 0 ? 'debit' : 'credit'
   const description = t.name ?? t.merchant_name ?? 'Transaction'
+  const pfcPrimary = t.personal_finance_category?.primary ?? null
 
   return {
     user_id: userId,
@@ -156,7 +164,7 @@ function toRow(
     date: t.date, // YYYY-MM-DD
     description,
     amount: Math.abs(t.amount),
-    category_id: assignCategory(description, type, rules, incomeCategoryId),
+    category_id: resolvePlaidCategory(description, type, pfcPrimary, rules, categoryIdByName, incomeCategoryId),
     source: 'plaid' as const,
     plaid_transaction_id: t.transaction_id,
     pending: t.pending ?? false,
