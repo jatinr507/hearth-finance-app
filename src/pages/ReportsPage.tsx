@@ -7,6 +7,7 @@ import { PrivacyToggle } from '@/components/PrivacyToggle'
 import { usePrivacy } from '@/contexts/PrivacyContext'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useAccounts } from '@/hooks/useAccounts'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { formatAmount } from '@/lib/utils'
 import { incomeAmount, expenseAmount } from '@/lib/txnClassify'
 import { buildSankey, groupByMonth, stackedSpendingByMonth, groupByCategory } from '@/lib/reportAggregations'
@@ -95,6 +96,11 @@ export function ReportsPage({ user }: ReportsPageProps) {
   const { hidden } = usePrivacy()
   const chartRef = useRef<HTMLDivElement>(null)
 
+  // Taller charts on desktop so they fill the wider column instead of floating small.
+  const isLg = useMediaQuery('(min-width: 1024px)')
+  const sankeyHeight = isLg ? 560 : 420
+  const barHeight = isLg ? 440 : 360
+
   // Per-chart denominators so privacy mode can show each flow as a % of the
   // relevant whole (total inflow for Sankey, period total for the bar charts).
   const incomeTotal = useMemo(() => filtered.reduce((s, t) => s + incomeAmount(t), 0), [filtered])
@@ -167,7 +173,7 @@ export function ReportsPage({ user }: ReportsPageProps) {
   }
 
   return (
-    <div className="pb-24 lg:pb-10 px-4 lg:px-8 pt-6 lg:pt-8 max-w-4xl mx-auto">
+    <div className="pb-24 lg:pb-10 px-4 lg:px-8 pt-6 lg:pt-8 max-w-6xl mx-auto">
       <div className="flex items-center gap-2 pb-4 lg:pb-6">
         <BarChart3 className="w-5 h-5 text-clay" />
         <h1 className="text-xl font-bold text-ink">Reports</h1>
@@ -246,10 +252,10 @@ export function ReportsPage({ user }: ReportsPageProps) {
 
       <Card ref={chartRef}>
         <ChartCarousel pages={chartPages}>
-          {chart === 'sankey' && <SankeyReport data={sankey} formatValue={formatValue} />}
-          {chart === 'bar' && <BarReport data={barData} formatValue={formatValue} />}
+          {chart === 'sankey' && <SankeyReport data={sankey} formatValue={formatValue} height={sankeyHeight} />}
+          {chart === 'bar' && <BarReport data={barData} formatValue={formatValue} height={barHeight} />}
           {chart === 'stacked' && (
-            <StackedBarReport rows={stacked.rows} categories={stacked.categories} formatValue={formatValue} />
+            <StackedBarReport rows={stacked.rows} categories={stacked.categories} formatValue={formatValue} height={barHeight} />
           )}
         </ChartCarousel>
       </Card>

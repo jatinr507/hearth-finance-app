@@ -116,8 +116,8 @@ export interface SankeyNodeDatum {
   name: string
   color?: string
   icon?: string
-  // 'income' | 'expense' | 'cash' — lets the renderer pick the right side total.
-  side?: 'income' | 'expense' | 'cash'
+  // Lets the renderer pick the right side total for the % label.
+  side?: 'income' | 'expense' | 'cash' | 'savings'
 }
 
 export interface SankeyData {
@@ -140,8 +140,9 @@ export function buildSankey(txns: Transaction[]): SankeyData {
   const nodes: SankeyNodeDatum[] = []
   const links: { source: number; target: number; value: number }[] = []
 
-  // Central node first so its index is stable.
-  const cashIndex = nodes.push({ name: 'Cash', color: '#BE6E46', side: 'cash' }) - 1
+  // Central hub node first so its index is stable. Income categories flow into it,
+  // and it splits out into expense categories + the Savings remainder.
+  const cashIndex = nodes.push({ name: 'Total Income', color: '#BE6E46', side: 'cash' }) - 1
 
   income.forEach((c) => {
     const idx = nodes.push({ name: c.name, color: c.color, icon: c.icon, side: 'income' }) - 1
@@ -154,6 +155,16 @@ export function buildSankey(txns: Transaction[]): SankeyData {
 
   const incomeTotal = income.reduce((s, c) => s + c.total, 0)
   const expenseTotal = expense.reduce((s, c) => s + c.total, 0)
+
+  // Balance the diagram: when income exceeds spending, route the leftover into a
+  // "Savings" node so total outflow equals inflow. Without it the Cash node's
+  // outgoing side is far thinner than its incoming side, forcing the expense
+  // ribbons to fan out from a sliver at the top and sweep across the canvas.
+  const net = incomeTotal - expenseTotal
+  if (net > 0) {
+    const idx = nodes.push({ name: 'Savings', color: '#C9A227', icon: '🐷', side: 'savings' }) - 1
+    links.push({ source: cashIndex, target: idx, value: net })
+  }
 
   return { nodes, links, incomeTotal, expenseTotal }
 }
