@@ -1,4 +1,5 @@
 import { Card } from '@/components/ui/Card'
+import { usePrivacy } from '@/contexts/PrivacyContext'
 import type { CategoryTotal } from '@/lib/reportAggregations'
 
 export type ReportChart = 'sankey' | 'bar' | 'stacked'
@@ -16,6 +17,7 @@ interface ReportSummaryProps {
 // the By-category tab leads with a spending breakdown; the others lead with the
 // income / expenses / savings summary.
 export function ReportSummary({ chart, incomeTotal, expenseTotal, incomeCats, expenseCats, formatValue }: ReportSummaryProps) {
+  const { hidden } = usePrivacy()
   const net = incomeTotal - expenseTotal
   const savingsRate = incomeTotal > 0 ? Math.round((net / incomeTotal) * 100) : 0
 
@@ -54,7 +56,10 @@ export function ReportSummary({ chart, incomeTotal, expenseTotal, incomeCats, ex
                     <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: c.color }} />
                   </div>
                   <span className="text-sm font-semibold text-ink amount text-right shrink-0">
-                    {formatValue(c.total)} <span className="text-muted font-normal">({pct}%)</span>
+                    {formatValue(c.total)}
+                    {/* In privacy mode formatValue already returns a %, so the
+                        explicit share would be a confusing second percentage. */}
+                    {!hidden && <span className="text-muted font-normal"> ({pct}%)</span>}
                   </span>
                 </div>
               )
