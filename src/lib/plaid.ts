@@ -70,3 +70,14 @@ export async function getPlaidItems(): Promise<PlaidItemSummary[]> {
   if (error) throw error
   return (data?.items ?? []) as PlaidItemSummary[]
 }
+
+/**
+ * Disconnect a linked item. Revokes it at Plaid and converts its accounts back
+ * to manual. With `purge`, also deletes the synced transactions.
+ */
+export async function disconnectItem(itemId: string, purge: boolean): Promise<void> {
+  const { error } = await supabase.functions.invoke('plaid-remove', {
+    body: { item_id: itemId, purge },
+  })
+  if (error) throw error
+}
