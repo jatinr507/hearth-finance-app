@@ -1,10 +1,10 @@
-import { useState } from 'react'
-import { Plus, CreditCard, Building2, PiggyBank, TrendingUp, Trash2, Pencil, Link2, RefreshCw } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { Plus, CreditCard, Building2, PiggyBank, TrendingUp, Trash2, Pencil, Link2, RefreshCw, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { formatCurrency } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
-import { syncTransactions } from '@/lib/plaid'
+import { syncTransactions, getPlaidItems, type PlaidItemSummary } from '@/lib/plaid'
 import { useAccounts } from '@/hooks/useAccounts'
 import { usePlaidConnect } from '@/hooks/usePlaidConnect'
 import type { User } from '@supabase/supabase-js'
@@ -35,12 +35,30 @@ const selectCls = 'bg-sand border border-hairline rounded-sm px-3 py-2.5 text-sm
 
 export function AccountsPage({ user }: AccountsPageProps) {
   const { accounts, loading, refetch } = useAccounts(user.id)
-  const { link, loading: linking, error: linkError } = usePlaidConnect({ onLinked: refetch })
+  const [items, setItems] = useState<PlaidItemSummary[]>([])
+
+  const loadItems = useCallback(async () => {
+    try {
+      setItems(await getPlaidItems())
+    } catch {
+      // Non-fatal: connection-health UI just won't show.
+    }
+  }, [])
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([refetch(), loadItems()])
+  }, [refetch, loadItems])
+
+  const { link, reconnect, loading: linking, error: linkError } = usePlaidConnect({ onLinked: refreshAll })
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
 
+  useEffect(() => { loadItems() }, [loadItems])
+
   const hasLinked = accounts.some((a) => !a.is_manual)
+  // Map our account's plaid_item_id (uuid) -> the item's health + Plaid item_id.
+  const itemById = new Map(items.map((i) => [i.id, i]))
 
   async function handleSync() {
     setSyncing(true)
@@ -49,7 +67,7 @@ export function AccountsPage({ user }: AccountsPageProps) {
       const results = await syncTransactions()
       const added = results.reduce((n, r) => n + r.added, 0)
       const needsAuth = results.some((r) => r.status === 'login_required')
-      await refetch()
+      await refreshAll()
       setSyncMsg(
         needsAuth
           ? 'Some accounts need reconnecting.'
@@ -217,7 +235,10 @@ export function AccountsPage({ user }: AccountsPageProps) {
         </div>
       ) : (
         <div className="grid gap-2 lg:grid-cols-2">
-          {accounts.map((acc) => (
+          {accounts.map((acc) => {
+            const item = acc.plaid_item_id ? itemById.get(acc.plaid_item_id) : undefined
+            const needsReconnect = Boolean(item && item.status !== 'good')
+            return (
             <div key={acc.id} className="space-y-2">
               <Card className="flex items-center gap-3">
                 <div className={`w-10 h-10 rounded-md flex items-center justify-center shrink-0 ${ACCOUNT_COLORS[acc.type]}`}>
@@ -226,7 +247,13 @@ export function AccountsPage({ user }: AccountsPageProps) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
                     <p className="text-sm font-medium text-ink truncate">{acc.name}</p>
-                    {!acc.is_manual && (
+                    {!acc.is_manual && needsReconnect && (
+                      <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold bg-tint-clay text-rust px-1.5 py-0.5 rounded-pill">
+                        <AlertTriangle className="w-2.5 h-2.5" />
+                        Reconnect
+                      </span>
+                    )}
+                    {!acc.is_manual && !needsReconnect && (
                       <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-semibold bg-tint-sage text-tint-sage-ink px-1.5 py-0.5 rounded-pill">
                         <Link2 className="w-2.5 h-2.5" />
                         Synced
@@ -238,6 +265,16 @@ export function AccountsPage({ user }: AccountsPageProps) {
                 <p className={`text-sm font-semibold amount ${acc.type === 'credit' || acc.type === 'loan' ? 'text-rust' : 'text-ink'}`}>
                   {formatCurrency(acc.balance)}
                 </p>
+                {needsReconnect && item && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => reconnect(item.item_id)}
+                    disabled={linking}
+                  >
+                    Reconnect
+                  </Button>
+                )}
                 {acc.is_manual && (
                   <>
                     <button
@@ -296,7 +333,8 @@ export function AccountsPage({ user }: AccountsPageProps) {
                 </Card>
               )}
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import type { PlaidItemStatus } from '@/types/database'
 
 // Thin client wrappers over the Plaid Edge Functions. supabase.functions.invoke
 // auto-attaches the user's auth JWT. The browser only ever handles short-lived
@@ -53,4 +54,19 @@ export async function syncTransactions(itemId?: string): Promise<SyncItemSummary
   })
   if (error) throw error
   return (data?.items ?? []) as SyncItemSummary[]
+}
+
+export interface PlaidItemSummary {
+  id: string
+  item_id: string
+  institution_name: string | null
+  status: PlaidItemStatus
+  updated_at: string
+}
+
+/** List the user's linked items (no access_token) for connection-health UI. */
+export async function getPlaidItems(): Promise<PlaidItemSummary[]> {
+  const { data, error } = await supabase.functions.invoke('plaid-items', { body: {} })
+  if (error) throw error
+  return (data?.items ?? []) as PlaidItemSummary[]
 }

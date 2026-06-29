@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { usePlaidLink } from 'react-plaid-link'
-import { createLinkToken, exchangePublicToken } from '@/lib/plaid'
+import { createLinkToken, exchangePublicToken, syncTransactions } from '@/lib/plaid'
 
 interface UsePlaidConnectOptions {
   /** Called after a successful link + exchange (e.g. to refetch accounts). */
@@ -13,16 +13,20 @@ export function usePlaidConnect({ onLinked }: UsePlaidConnectOptions = {}) {
   const [linkToken, setLinkToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // When set, this is a reconnect (update mode) rather than a fresh link.
-  const [reconnecting, setReconnecting] = useState(false)
+  // The Plaid item_id when this is a reconnect (update mode); null for a fresh link.
+  const reconnectItemId = useRef<string | null>(null)
 
   const { open, ready } = usePlaidLink({
     token: linkToken,
     onSuccess: async (publicToken) => {
       try {
         setLoading(true)
-        // Update mode returns no new accounts to exchange; just refresh.
-        if (!reconnecting) {
+        const itemId = reconnectItemId.current
+        if (itemId) {
+          // Update mode: no new accounts to exchange. Re-sync so the item's
+          // status resets to 'good' and fresh transactions come in.
+          await syncTransactions(itemId)
+        } else {
           await exchangePublicToken(publicToken)
         }
         await onLinked?.()
@@ -31,12 +35,12 @@ export function usePlaidConnect({ onLinked }: UsePlaidConnectOptions = {}) {
       } finally {
         setLoading(false)
         setLinkToken(null)
-        setReconnecting(false)
+        reconnectItemId.current = null
       }
     },
     onExit: () => {
       setLinkToken(null)
-      setReconnecting(false)
+      reconnectItemId.current = null
       setLoading(false)
     },
   })
@@ -46,7 +50,7 @@ export function usePlaidConnect({ onLinked }: UsePlaidConnectOptions = {}) {
     setLoading(true)
     try {
       const token = await createLinkToken(itemId)
-      setReconnecting(Boolean(itemId))
+      reconnectItemId.current = itemId ?? null
       setLinkToken(token)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to start linking')
