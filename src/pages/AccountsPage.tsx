@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Plus, CreditCard, Building2, PiggyBank, TrendingUp, Trash2, Pencil, Link2, RefreshCw, AlertTriangle } from 'lucide-react'
+import { Plus, CreditCard, Building2, PiggyBank, TrendingUp, Trash2, Pencil, Link2, RefreshCw, AlertTriangle, Unlink } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { formatCurrency } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
-import { syncTransactions, getPlaidItems, type PlaidItemSummary } from '@/lib/plaid'
+import { syncTransactions, getPlaidItems, disconnectItem, type PlaidItemSummary } from '@/lib/plaid'
 import { useAccounts } from '@/hooks/useAccounts'
 import { usePlaidConnect } from '@/hooks/usePlaidConnect'
 import type { User } from '@supabase/supabase-js'
@@ -53,6 +53,23 @@ export function AccountsPage({ user }: AccountsPageProps) {
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
+  // Item pending disconnect confirmation.
+  const [disconnectTarget, setDisconnectTarget] = useState<PlaidItemSummary | null>(null)
+  const [disconnecting, setDisconnecting] = useState(false)
+
+  async function handleDisconnect(purge: boolean) {
+    if (!disconnectTarget) return
+    setDisconnecting(true)
+    try {
+      await disconnectItem(disconnectTarget.item_id, purge)
+      await refreshAll()
+      setDisconnectTarget(null)
+    } catch (e) {
+      setSyncMsg(e instanceof Error ? e.message : 'Failed to disconnect.')
+    } finally {
+      setDisconnecting(false)
+    }
+  }
 
   useEffect(() => { loadItems() }, [loadItems])
 
@@ -175,6 +192,39 @@ export function AccountsPage({ user }: AccountsPageProps) {
         <p className="text-xs text-muted">{syncMsg}</p>
       )}
 
+      {/* Disconnect confirmation */}
+      {disconnectTarget && (
+        <Card className="space-y-3 border border-rust/30">
+          <div className="flex items-start gap-2">
+            <Unlink className="w-4 h-4 text-rust shrink-0 mt-0.5" />
+            <div>
+              <h2 className="text-sm font-semibold text-ink">
+                Disconnect {disconnectTarget.institution_name ?? 'this bank'}?
+              </h2>
+              <p className="text-xs text-muted mt-1">
+                We'll revoke access at Plaid and delete the stored connection. Its accounts stay and
+                become manual. Choose whether to keep the transactions already synced.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={() => setDisconnectTarget(null)} disabled={disconnecting}>
+              Cancel
+            </Button>
+            <Button onClick={() => handleDisconnect(false)} disabled={disconnecting}>
+              {disconnecting ? 'Working…' : 'Keep transactions'}
+            </Button>
+            <button
+              onClick={() => handleDisconnect(true)}
+              disabled={disconnecting}
+              className="text-xs text-rust hover:underline disabled:opacity-50 px-2"
+            >
+              Disconnect & delete transactions
+            </button>
+          </div>
+        </Card>
+      )}
+
       {/* Net worth hero card */}
       <Card className="bg-ink border-0 rounded-lg">
         <p className="text-on-ink-muted text-xs font-semibold uppercase tracking-widest">Total Net Worth</p>
@@ -274,6 +324,15 @@ export function AccountsPage({ user }: AccountsPageProps) {
                   >
                     Reconnect
                   </Button>
+                )}
+                {!acc.is_manual && item && (
+                  <button
+                    onClick={() => setDisconnectTarget(item)}
+                    title="Disconnect bank"
+                    className="text-muted/60 hover:text-rust transition-colors p-1"
+                  >
+                    <Unlink className="w-4 h-4" />
+                  </button>
                 )}
                 {acc.is_manual && (
                   <>

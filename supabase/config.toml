@@ -11,3 +11,6 @@ verify_jwt = true
 
 [functions.plaid-items]
 verify_jwt = true
+
+[functions.plaid-remove]
+verify_jwt = true
