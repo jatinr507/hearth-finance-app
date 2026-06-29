@@ -7,6 +7,7 @@ import { formatCurrency } from '@/lib/utils'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useAccounts } from '@/hooks/useAccounts'
 import { signedAmount, incomeAmount, expenseAmount, txnKind } from '@/lib/txnClassify'
+import { groupByCategory, groupByMonth } from '@/lib/reportAggregations'
 import type { User } from '@supabase/supabase-js'
 
 interface DashboardPageProps {
@@ -111,34 +112,15 @@ export function DashboardPage({ user }: DashboardPageProps) {
     ? netWorthHistory[netWorthHistory.length - 1].netWorth - netWorthHistory[0].netWorth
     : 0
 
-  const monthlyData = useMemo(() => {
-    return Array.from({ length: 6 }, (_, i) => {
-      const month = subMonths(now, 5 - i)
-      const start = startOfMonth(month)
-      const end = endOfMonth(month)
-      const total = transactions
-        .filter((t) => {
-          const d = parseISO(t.date)
-          return d >= start && d <= end
-        })
-        .reduce((s, t) => s + expenseAmount(t), 0)
-      return { month: format(month, 'MMM'), total }
-    })
-  }, [transactions, now])
+  const monthlyData = useMemo(
+    () => groupByMonth(transactions, 6, expenseAmount, now).map((b) => ({ month: b.month, total: b.value })),
+    [transactions, now],
+  )
 
-  const topCategories = useMemo(() => {
-    const map = new Map<string, { name: string; color: string; total: number }>()
-    cashFlowTx
-      .filter((t) => txnKind(t) === 'expense' && t.category)
-      .forEach((t) => {
-        const cat = t.category!
-        const existing = map.get(cat.id) ?? { name: cat.name, color: cat.color, total: 0 }
-        map.set(cat.id, { ...existing, total: existing.total + expenseAmount(t) })
-      })
-    return Array.from(map.values())
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 5)
-  }, [cashFlowTx])
+  const topCategories = useMemo(
+    () => groupByCategory(cashFlowTx, 'expense').slice(0, 5),
+    [cashFlowTx],
+  )
 
   const netCashFlow = income - spending
   const avgSpending = useMemo(
