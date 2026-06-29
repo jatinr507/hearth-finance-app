@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Plus, CreditCard, Building2, PiggyBank, TrendingUp, Trash2, Pencil, Link2, RefreshCw, AlertTriangle, Unlink } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, timeAgo } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import { syncTransactions, getPlaidItems, disconnectItem, type PlaidItemSummary } from '@/lib/plaid'
 import { useAccounts } from '@/hooks/useAccounts'
@@ -322,7 +322,12 @@ export function AccountsPage({ user }: AccountsPageProps) {
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-muted capitalize">{acc.institution} · {acc.type}</p>
+                  <p className="text-xs text-muted capitalize">
+                    {acc.institution} · {acc.type}
+                    {!acc.is_manual && !needsReconnect && item && (
+                      <span className="normal-case"> · Synced {timeAgo(item.updated_at)}</span>
+                    )}
+                  </p>
                 </div>
                 <p className={`text-sm font-semibold amount ${acc.type === 'credit' || acc.type === 'loan' ? 'text-rust' : 'text-ink'}`}>
                   {formatCurrency(acc.balance)}
