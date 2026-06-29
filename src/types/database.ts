@@ -29,6 +29,7 @@ export type Category = {
   color: string
   icon: string
   is_income: boolean
+  is_transfer: boolean
   is_system: boolean
 }
 

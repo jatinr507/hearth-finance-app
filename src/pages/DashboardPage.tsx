@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/Card'
 import { formatCurrency } from '@/lib/utils'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useAccounts } from '@/hooks/useAccounts'
-import { isInflow } from '@/lib/txnDirection'
+import { signedAmount, incomeAmount, expenseAmount, txnKind } from '@/lib/txnClassify'
 import type { User } from '@supabase/supabase-js'
 
 interface DashboardPageProps {
@@ -70,12 +70,12 @@ export function DashboardPage({ user }: DashboardPageProps) {
   )
 
   const income = useMemo(
-    () => cashFlowTx.filter((t) => isInflow(t)).reduce((s, t) => s + t.amount, 0),
+    () => cashFlowTx.reduce((s, t) => s + incomeAmount(t), 0),
     [cashFlowTx],
   )
 
   const spending = useMemo(
-    () => cashFlowTx.filter((t) => !isInflow(t)).reduce((s, t) => s + t.amount, 0),
+    () => cashFlowTx.reduce((s, t) => s + expenseAmount(t), 0),
     [cashFlowTx],
   )
 
@@ -94,7 +94,7 @@ export function DashboardPage({ user }: DashboardPageProps) {
       const end = endOfMonth(month)
       const net = transactions
         .filter((t) => { const d = parseISO(t.date); return d >= start && d <= end })
-        .reduce((s, t) => s + (isInflow(t) ? t.amount : -t.amount), 0)
+        .reduce((s, t) => s + (txnKind(t) === 'transfer' ? 0 : signedAmount(t)), 0)
       return { month: format(month, months > 6 ? 'MMM yy' : 'MMM'), net, label: format(month, 'MMMM yyyy') }
     })
     // Work backwards from current net worth to reconstruct history
@@ -119,9 +119,9 @@ export function DashboardPage({ user }: DashboardPageProps) {
       const total = transactions
         .filter((t) => {
           const d = parseISO(t.date)
-          return d >= start && d <= end && !isInflow(t)
+          return d >= start && d <= end
         })
-        .reduce((s, t) => s + t.amount, 0)
+        .reduce((s, t) => s + expenseAmount(t), 0)
       return { month: format(month, 'MMM'), total }
     })
   }, [transactions, now])
@@ -129,11 +129,11 @@ export function DashboardPage({ user }: DashboardPageProps) {
   const topCategories = useMemo(() => {
     const map = new Map<string, { name: string; color: string; total: number }>()
     cashFlowTx
-      .filter((t) => !isInflow(t) && t.category)
+      .filter((t) => txnKind(t) === 'expense' && t.category)
       .forEach((t) => {
         const cat = t.category!
         const existing = map.get(cat.id) ?? { name: cat.name, color: cat.color, total: 0 }
-        map.set(cat.id, { ...existing, total: existing.total + t.amount })
+        map.set(cat.id, { ...existing, total: existing.total + expenseAmount(t) })
       })
     return Array.from(map.values())
       .sort((a, b) => b.total - a.total)
