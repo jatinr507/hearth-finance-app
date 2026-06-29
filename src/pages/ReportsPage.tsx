@@ -1,13 +1,16 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { parseISO, subMonths, startOfMonth } from 'date-fns'
-import { BarChart3 } from 'lucide-react'
+import { BarChart3, Image, Sheet } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 import { Card } from '@/components/ui/Card'
+import { PrivacyToggle } from '@/components/PrivacyToggle'
+import { usePrivacy } from '@/contexts/PrivacyContext'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useAccounts } from '@/hooks/useAccounts'
-import { formatCurrency } from '@/lib/utils'
+import { formatAmount } from '@/lib/utils'
 import { incomeAmount, expenseAmount } from '@/lib/txnClassify'
 import { buildSankey, groupByMonth, stackedSpendingByMonth } from '@/lib/reportAggregations'
+import { downloadPng, downloadCsv } from '@/lib/reportExport'
 import { SankeyReport } from '@/components/reports/SankeyReport'
 import { BarReport, type IncomeExpenseMonth } from '@/components/reports/BarReport'
 import { StackedBarReport } from '@/components/reports/StackedBarReport'
@@ -60,6 +63,21 @@ export function ReportsPage({ user }: ReportsPageProps) {
 
   const stacked = useMemo(() => stackedSpendingByMonth(filtered, months, 6, now), [filtered, months, now])
 
+  const { hidden } = usePrivacy()
+  const chartRef = useRef<HTMLDivElement>(null)
+
+  // Per-chart denominators so privacy mode can show each flow as a % of the
+  // relevant whole (total inflow for Sankey, period total for the bar charts).
+  const incomeTotal = useMemo(() => filtered.reduce((s, t) => s + incomeAmount(t), 0), [filtered])
+  const expenseTotal = useMemo(() => filtered.reduce((s, t) => s + expenseAmount(t), 0), [filtered])
+  const chartTotal =
+    chart === 'sankey'
+      ? Math.max(incomeTotal, expenseTotal)
+      : chart === 'stacked'
+        ? expenseTotal
+        : incomeTotal + expenseTotal
+  const formatValue = (v: number) => formatAmount(v, { hidden, total: chartTotal })
+
   function toggleAccount(id: string) {
     setAccountIds((prev) => {
       const next = new Set(prev)
@@ -67,6 +85,37 @@ export function ReportsPage({ user }: ReportsPageProps) {
       else next.add(id)
       return next
     })
+  }
+
+  async function handleExportImage() {
+    if (chartRef.current) await downloadPng(chartRef.current, `report-${chart}-${range}.png`)
+  }
+
+  function handleExportCsv() {
+    let rows: Record<string, unknown>[]
+    if (chart === 'sankey') {
+      rows = sankey.links.map((l) => ({
+        from: sankey.nodes[l.source]?.name ?? '',
+        to: sankey.nodes[l.target]?.name ?? '',
+        value: hidden ? formatValue(l.value) : l.value,
+      }))
+    } else if (chart === 'stacked') {
+      const nameById = new Map(stacked.categories.map((c) => [c.id, c.name]))
+      rows = stacked.rows.map((r) => {
+        const out: Record<string, unknown> = { month: r.label }
+        stacked.categories.forEach((c) => {
+          out[nameById.get(c.id) ?? c.id] = hidden ? formatValue(r[c.id] as number) : r[c.id]
+        })
+        return out
+      })
+    } else {
+      rows = barData.map((b) => ({
+        month: b.label,
+        income: hidden ? formatValue(b.income) : b.income,
+        spending: hidden ? formatValue(b.spending) : b.spending,
+      }))
+    }
+    downloadCsv(rows, `report-${chart}-${range}.csv`)
   }
 
   if (txLoading || accLoading) {
@@ -82,6 +131,25 @@ export function ReportsPage({ user }: ReportsPageProps) {
       <div className="flex items-center gap-2 pb-4 lg:pb-6">
         <BarChart3 className="w-5 h-5 text-clay" />
         <h1 className="text-xl font-bold text-ink">Reports</h1>
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            type="button"
+            onClick={handleExportImage}
+            title="Save as image"
+            className="inline-flex items-center justify-center w-8 h-8 rounded-full text-muted hover:text-ink hover:bg-sand transition-colors"
+          >
+            <Image className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            title="Export CSV"
+            className="inline-flex items-center justify-center w-8 h-8 rounded-full text-muted hover:text-ink hover:bg-sand transition-colors"
+          >
+            <Sheet className="w-4 h-4" />
+          </button>
+          <PrivacyToggle />
+        </div>
       </div>
 
       {/* Chart type */}
@@ -136,11 +204,11 @@ export function ReportsPage({ user }: ReportsPageProps) {
         )}
       </div>
 
-      <Card>
-        {chart === 'sankey' && <SankeyReport data={sankey} formatValue={formatCurrency} />}
-        {chart === 'bar' && <BarReport data={barData} formatValue={formatCurrency} />}
+      <Card ref={chartRef}>
+        {chart === 'sankey' && <SankeyReport data={sankey} formatValue={formatValue} />}
+        {chart === 'bar' && <BarReport data={barData} formatValue={formatValue} />}
         {chart === 'stacked' && (
-          <StackedBarReport rows={stacked.rows} categories={stacked.categories} formatValue={formatCurrency} />
+          <StackedBarReport rows={stacked.rows} categories={stacked.categories} formatValue={formatValue} />
         )}
       </Card>
     </div>

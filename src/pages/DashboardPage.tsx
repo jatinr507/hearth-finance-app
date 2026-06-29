@@ -3,7 +3,9 @@ import { startOfMonth, endOfMonth, format, subMonths, parseISO, startOfYear } fr
 import { TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, AreaChart, Area } from 'recharts'
 import { Card } from '@/components/ui/Card'
-import { formatCurrency } from '@/lib/utils'
+import { PrivacyToggle } from '@/components/PrivacyToggle'
+import { usePrivacy } from '@/contexts/PrivacyContext'
+import { formatAmount } from '@/lib/utils'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useAccounts } from '@/hooks/useAccounts'
 import { signedAmount, incomeAmount, expenseAmount, txnKind } from '@/lib/txnClassify'
@@ -39,6 +41,10 @@ export function DashboardPage({ user }: DashboardPageProps) {
   const [netWorthRange, setNetWorthRange] = useState<RangeLabel>('6M')
   const [cashFlowPeriod, setCashFlowPeriod] = useState<CashFlowPeriod>('month')
   const gradientId = useId()
+  const { hidden } = usePrivacy()
+  // Privacy-aware formatter: pass a `total` to mask as a percentage, omit it to
+  // mask as dots (for figures with no meaningful whole, e.g. net worth).
+  const fmt = (v: number, total?: number) => formatAmount(v, { hidden, total })
 
   const now = useMemo(() => new Date(), [])
 
@@ -128,6 +134,11 @@ export function DashboardPage({ user }: DashboardPageProps) {
     [monthlyData],
   )
 
+  // Denominators for privacy-mode percentages.
+  const cashFlowTotal = income + spending
+  const spendingTrendTotal = useMemo(() => monthlyData.reduce((s, d) => s + d.total, 0), [monthlyData])
+  const categoryTotal = useMemo(() => topCategories.reduce((s, c) => s + c.total, 0), [topCategories])
+
   if (txLoading || accLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -139,11 +150,14 @@ export function DashboardPage({ user }: DashboardPageProps) {
   return (
     <div className="pb-24 lg:pb-10 px-4 lg:px-8 pt-6 lg:pt-8 max-w-6xl mx-auto">
       {/* Header */}
-      <div className="pb-4 lg:pb-6">
-        <p className="text-sm text-muted">Good {getGreeting()},</p>
-        <h1 className="text-xl font-bold text-ink">
-          {user.user_metadata?.name?.split(' ')[0] ?? 'there'}
-        </h1>
+      <div className="pb-4 lg:pb-6 flex items-end justify-between">
+        <div>
+          <p className="text-sm text-muted">Good {getGreeting()},</p>
+          <h1 className="text-xl font-bold text-ink">
+            {user.user_metadata?.name?.split(' ')[0] ?? 'there'}
+          </h1>
+        </div>
+        <PrivacyToggle />
       </div>
 
       {/* Desktop 2-column layout */}
@@ -155,9 +169,9 @@ export function DashboardPage({ user }: DashboardPageProps) {
             <div className="flex items-start justify-between mb-1">
               <div>
                 <p className="text-on-ink-muted text-xs font-semibold uppercase tracking-widest">Net Worth</p>
-                <p className="text-3xl font-bold mt-1 text-on-ink amount">{formatCurrency(netWorth)}</p>
+                <p className="text-3xl font-bold mt-1 text-on-ink amount">{fmt(netWorth)}</p>
                 <p className={`text-xs mt-1 font-medium ${netWorthTrend >= 0 ? 'text-sage' : 'text-rust'}`}>
-                  {netWorthTrend >= 0 ? '↑' : '↓'} {formatCurrency(Math.abs(netWorthTrend))} this period
+                  {netWorthTrend >= 0 ? '↑' : '↓'} {fmt(Math.abs(netWorthTrend))} this period
                 </p>
               </div>
               <div className="flex gap-1">
@@ -187,7 +201,7 @@ export function DashboardPage({ user }: DashboardPageProps) {
                   </defs>
                   <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#9A8E79' }} axisLine={false} tickLine={false} />
                   <Tooltip
-                    formatter={(v) => [formatCurrency(v as number), 'Net Worth']}
+                    formatter={(v) => [fmt(v as number), 'Net Worth']}
                     labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? ''}
                     contentStyle={{ fontSize: 12, borderRadius: 12, border: '1px solid #3A332B', backgroundColor: '#29241E', color: '#F2EBDD' }}
                   />
@@ -220,7 +234,7 @@ export function DashboardPage({ user }: DashboardPageProps) {
                   <ArrowUpRight className="w-4 h-4" />
                   <span className="text-xs font-semibold">Income</span>
                 </div>
-                <p className="text-lg font-bold text-ink amount">{formatCurrency(income)}</p>
+                <p className="text-lg font-bold text-ink amount">{fmt(income, cashFlowTotal)}</p>
                 <p className="text-xs text-muted">{cashFlowRange.label}</p>
               </Card>
               <Card>
@@ -228,7 +242,7 @@ export function DashboardPage({ user }: DashboardPageProps) {
                   <ArrowDownRight className="w-4 h-4" />
                   <span className="text-xs font-semibold">Spending</span>
                 </div>
-                <p className="text-lg font-bold text-ink amount">{formatCurrency(spending)}</p>
+                <p className="text-lg font-bold text-ink amount">{fmt(spending, cashFlowTotal)}</p>
                 <p className="text-xs text-muted">{cashFlowRange.label}</p>
               </Card>
             </div>
@@ -236,7 +250,7 @@ export function DashboardPage({ user }: DashboardPageProps) {
 
           {/* Net savings line */}
           <p className={`text-sm font-medium -mt-1 px-1 ${netCashFlow >= 0 ? 'text-sage' : 'text-rust'}`}>
-            {netCashFlow >= 0 ? '+' : ''}{formatCurrency(netCashFlow)} {netCashFlow >= 0 ? 'saved' : 'over budget'} · {cashFlowRange.label.toLowerCase()}
+            {netCashFlow >= 0 ? '+' : ''}{fmt(netCashFlow)} {netCashFlow >= 0 ? 'saved' : 'over budget'} · {cashFlowRange.label.toLowerCase()}
           </p>
 
           {/* Chart */}
@@ -244,14 +258,14 @@ export function DashboardPage({ user }: DashboardPageProps) {
             <div className="flex items-center gap-2 mb-4">
               <TrendingDown className="w-4 h-4 text-muted" />
               <h2 className="text-sm font-semibold text-ink-2">Spending Trend</h2>
-              <span className="text-xs text-muted ml-auto">Avg {formatCurrency(avgSpending)}/mo</span>
+              <span className="text-xs text-muted ml-auto">Avg {fmt(avgSpending)}/mo</span>
             </div>
             <ResponsiveContainer width="100%" height={160}>
               <BarChart data={monthlyData} barSize={28}>
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#8A7F6D' }} axisLine={false} tickLine={false} />
                 <YAxis hide />
                 <Tooltip
-                  formatter={(v) => [formatCurrency(v as number), 'Spending']}
+                  formatter={(v) => [fmt(v as number, spendingTrendTotal), 'Spending']}
                   contentStyle={{ fontSize: 12, borderRadius: 12, border: '1px solid #E2D9CA', boxShadow: '0 4px 12px rgba(43,38,32,0.08)', backgroundColor: '#FBF8F2' }}
                 />
                 <Bar dataKey="total" radius={[4, 4, 0, 0]}>
@@ -282,7 +296,7 @@ export function DashboardPage({ user }: DashboardPageProps) {
                         style={{ width: `${(cat.total / topCategories[0].total) * 100}%`, backgroundColor: cat.color }}
                       />
                     </div>
-                    <span className="text-sm font-semibold text-ink amount w-20 text-right">{formatCurrency(cat.total)}</span>
+                    <span className="text-sm font-semibold text-ink amount w-20 text-right">{fmt(cat.total, categoryTotal)}</span>
                   </div>
                 ))}
               </div>
@@ -303,7 +317,7 @@ export function DashboardPage({ user }: DashboardPageProps) {
                       <p className="text-xs text-muted">{acc.institution}</p>
                     </div>
                     <span className={`text-sm font-semibold amount ${acc.type === 'credit' || acc.type === 'loan' ? 'text-rust' : 'text-ink'}`}>
-                      {formatCurrency(acc.balance)}
+                      {fmt(acc.balance)}
                     </span>
                   </div>
                 ))}

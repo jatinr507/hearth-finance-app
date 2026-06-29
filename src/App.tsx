@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
+import { PrivacyProvider } from '@/contexts/PrivacyContext'
 import { BottomNav } from '@/components/BottomNav'
 import { SideNav } from '@/components/SideNav'
 import { LoginPage } from '@/pages/LoginPage'
@@ -26,8 +27,9 @@ export default function App() {
   }
 
   return (
-    <BrowserRouter>
-      <div className="min-h-svh bg-paper lg:flex">
+    <PrivacyProvider>
+      <BrowserRouter>
+        <div className="min-h-svh bg-paper lg:flex">
         <SideNav />
         <main className="flex-1 min-w-0 lg:ml-60">
           <Routes>
@@ -40,7 +42,8 @@ export default function App() {
           </Routes>
         </main>
         <BottomNav />
-      </div>
-    </BrowserRouter>
+        </div>
+      </BrowserRouter>
+    </PrivacyProvider>
   )
 }
