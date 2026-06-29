@@ -37,3 +37,20 @@ export async function exchangePublicToken(
   if (error) throw error
   return data as ExchangeResult
 }
+
+export interface SyncItemSummary {
+  item_id: string
+  added: number
+  modified: number
+  removed: number
+  status: string
+}
+
+/** Sync transactions + balances. Omit `itemId` to sync all linked items. */
+export async function syncTransactions(itemId?: string): Promise<SyncItemSummary[]> {
+  const { data, error } = await supabase.functions.invoke('plaid-sync', {
+    body: itemId ? { item_id: itemId } : {},
+  })
+  if (error) throw error
+  return (data?.items ?? []) as SyncItemSummary[]
+}

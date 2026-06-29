@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Plus, CreditCard, Building2, PiggyBank, TrendingUp, Trash2, Pencil, Link2 } from 'lucide-react'
+import { Plus, CreditCard, Building2, PiggyBank, TrendingUp, Trash2, Pencil, Link2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { formatCurrency } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
+import { syncTransactions } from '@/lib/plaid'
 import { useAccounts } from '@/hooks/useAccounts'
 import { usePlaidConnect } from '@/hooks/usePlaidConnect'
 import type { User } from '@supabase/supabase-js'
@@ -35,7 +36,31 @@ const selectCls = 'bg-sand border border-hairline rounded-sm px-3 py-2.5 text-sm
 export function AccountsPage({ user }: AccountsPageProps) {
   const { accounts, loading, refetch } = useAccounts(user.id)
   const { link, loading: linking, error: linkError } = usePlaidConnect({ onLinked: refetch })
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
+
+  const hasLinked = accounts.some((a) => !a.is_manual)
+
+  async function handleSync() {
+    setSyncing(true)
+    setSyncMsg(null)
+    try {
+      const results = await syncTransactions()
+      const added = results.reduce((n, r) => n + r.added, 0)
+      const needsAuth = results.some((r) => r.status === 'login_required')
+      await refetch()
+      setSyncMsg(
+        needsAuth
+          ? 'Some accounts need reconnecting.'
+          : `Synced — ${added} new transaction${added === 1 ? '' : 's'}.`,
+      )
+    } catch (e) {
+      setSyncMsg(e instanceof Error ? e.message : 'Sync failed.')
+    } finally {
+      setSyncing(false)
+    }
+  }
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ name: '', institution: '', type: 'checking' as AccountType, balance: '' })
 
@@ -108,6 +133,12 @@ export function AccountsPage({ user }: AccountsPageProps) {
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-bold text-ink">Accounts</h1>
         <div className="flex items-center gap-2">
+          {hasLinked && (
+            <Button size="sm" variant="secondary" onClick={handleSync} disabled={syncing}>
+              <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+              {syncing ? 'Syncing…' : 'Sync now'}
+            </Button>
+          )}
           <Button size="sm" onClick={link} disabled={linking}>
             <Link2 className="w-4 h-4" />
             {linking ? 'Linking…' : 'Link a bank'}
@@ -121,6 +152,9 @@ export function AccountsPage({ user }: AccountsPageProps) {
 
       {linkError && (
         <p className="text-xs text-rust">{linkError}</p>
+      )}
+      {syncMsg && (
+        <p className="text-xs text-muted">{syncMsg}</p>
       )}
 
       {/* Net worth hero card */}

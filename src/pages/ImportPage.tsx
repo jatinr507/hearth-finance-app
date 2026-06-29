@@ -12,6 +12,7 @@ import {
   type ParseResult,
 } from '@/lib/csvParsers'
 import { supabase } from '@/lib/supabase'
+import { assignCategory } from '@/lib/categorize'
 import { useAccounts } from '@/hooks/useAccounts'
 import type { User } from '@supabase/supabase-js'
 import type { AccountType, CategoryRule } from '@/types/database'
@@ -187,11 +188,7 @@ export function ImportPage({ user }: ImportPageProps) {
     const newRows = parseResult.transactions
       .filter((t) => !duplicateKeys.has(dupKey(t)))
       .map((t) => {
-        const match = rules.find((r) =>
-          t.description.toLowerCase().includes(r.pattern.toLowerCase())
-        )
-        // Auto-assign Income category to credits with no matching rule
-        const category_id = match?.category_id ?? (t.type === 'credit' ? incomeCategoryId : null)
+        const category_id = assignCategory(t.description, t.type, rules, incomeCategoryId)
         return {
           user_id: user.id,
           account_id: accountId,
