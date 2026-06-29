@@ -133,7 +133,14 @@ function TransactionRow({
       onClick={() => onTap(t)}
     >
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-ink truncate">{t.description}</p>
+        <div className="flex items-center gap-1.5">
+          <p className="text-sm font-medium text-ink truncate">{t.description}</p>
+          {t.pending && (
+            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide bg-sand text-ink-2 px-1.5 py-0.5 rounded-pill">
+              Pending
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-2 mt-0.5">
           <p className="text-xs text-muted">{t.account?.name ?? 'Unknown account'}</p>
           {t.category && (
