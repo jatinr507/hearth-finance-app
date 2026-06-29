@@ -4,7 +4,7 @@
 import { Products, CountryCode } from 'npm:plaid@27'
 import { corsHeaders, json } from '../_shared/cors.ts'
 import { getUser, serviceClient } from '../_shared/auth.ts'
-import { plaidClient } from '../_shared/plaid.ts'
+import { plaidClient, plaidErrorInfo } from '../_shared/plaid.ts'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
     })
     return json({ link_token: resp.data.link_token })
   } catch (e) {
-    console.error('linkTokenCreate failed', e)
+    console.error('linkTokenCreate failed:', plaidErrorInfo(e))
     return json({ error: 'Failed to create link token' }, 500)
   }
 })

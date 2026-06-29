@@ -45,6 +45,36 @@ export function isTransactionAccount(acct: AccountBase): boolean {
   return acct.type === 'depository' || acct.type === 'credit'
 }
 
+// Extract a log-safe summary of a Plaid/axios error. NEVER log the raw error:
+// the thrown AxiosError carries `.config.headers` containing PLAID-SECRET and
+// PLAID-CLIENT-ID, which would leak into the function logs in plaintext.
+export function plaidErrorInfo(e: unknown): string {
+  // deno-lint-ignore no-explicit-any
+  const data = (e as any)?.response?.data
+  if (data?.error_code) {
+    return `${data.error_code}${data.error_message ? `: ${data.error_message}` : ''}`
+  }
+  return e instanceof Error ? e.message : 'unknown error'
+}
+
+/** Plaid error code if present (e.g. ITEM_LOGIN_REQUIRED), else null. */
+export function plaidErrorCode(e: unknown): string | null {
+  // deno-lint-ignore no-explicit-any
+  return (e as any)?.response?.data?.error_code ?? null
+}
+
+// Item/credential errors that genuinely require the user to re-authenticate.
+// Everything else (INSTITUTION_DOWN, RATE_LIMIT_EXCEEDED, PLANNED_MAINTENANCE,
+// INSTITUTION_NOT_RESPONDING, …) is transient and must NOT flip the item to a
+// sticky error status that nags the user to reconnect.
+export const RECONNECT_ERROR_CODES = new Set<string>([
+  'ITEM_LOGIN_REQUIRED',
+  'PENDING_EXPIRATION',
+  'INVALID_CREDENTIALS',
+  'INVALID_UPDATED_USERNAME',
+  'INVALID_MFA',
+])
+
 // Plaid `current` balance for credit/loan is what you owe (positive). Our app
 // treats those as positive balances and subtracts them in net-worth math, so
 // pass the absolute current balance through.

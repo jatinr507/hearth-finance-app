@@ -4,7 +4,7 @@
 //   purge=true also deletes the synced transactions for the item's accounts.
 import { corsHeaders, json } from '../_shared/cors.ts'
 import { getUser, serviceClient } from '../_shared/auth.ts'
-import { plaidClient } from '../_shared/plaid.ts'
+import { plaidClient, plaidErrorInfo } from '../_shared/plaid.ts'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
   try {
     await plaidClient().itemRemove({ access_token: item.access_token })
   } catch (e) {
-    console.error('itemRemove failed', e)
+    console.error('itemRemove failed:', plaidErrorInfo(e))
     return json({ error: 'Failed to disconnect at Plaid' }, 502)
   }
 
