@@ -5,3 +5,6 @@ verify_jwt = true
 
 [functions.plaid-exchange]
 verify_jwt = true
+
+[functions.plaid-sync]
+verify_jwt = true
