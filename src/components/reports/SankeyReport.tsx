@@ -52,8 +52,10 @@ function SankeyChart({
     links: data.links.map((l) => ({ ...l })),
   })
 
-  const sideTotal = (side?: string) =>
-    side === 'income' || side === 'savings' ? data.incomeTotal : side === 'expense' ? data.expenseTotal : 0
+  // Every flow is shown as a share of Total Income (= total inflow = total
+  // outflow), so income sources, expenses, and savings are all comparable. The
+  // hub itself has no share.
+  const sideTotal = (side?: string) => (side === 'cash' ? 0 : data.incomeTotal)
   const linkPath = sankeyLinkHorizontal<NodeExtra, LinkExtra>()
 
   return (
