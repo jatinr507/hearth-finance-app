@@ -38,7 +38,12 @@ export function usePlaidConnect({ onLinked }: UsePlaidConnectOptions = {}) {
         reconnectItemId.current = null
       }
     },
-    onExit: () => {
+    onExit: (err) => {
+      // err is null on a normal user cancel; set only on an actual Link error
+      // (e.g. INVALID_LINK_TOKEN for an expired token, or an institution error).
+      if (err) {
+        setError(err.display_message ?? err.error_message ?? 'Linking was interrupted. Please try again.')
+      }
       setLinkToken(null)
       reconnectItemId.current = null
       setLoading(false)
