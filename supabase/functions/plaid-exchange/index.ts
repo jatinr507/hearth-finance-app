@@ -62,32 +62,92 @@ Deno.serve(async (req) => {
       return json({ error: 'Failed to store item' }, 500)
     }
 
-    const rows = acctResp.data.accounts.map((a) => ({
-      user_id: user.id,
-      name: a.name,
-      type: mapAccountType(a),
-      institution: institutionName ?? 'Bank',
-      balance: accountBalance(a),
-      plaid_item_id: itemRow.id,
-      plaid_account_id: a.account_id,
-      is_manual: false,
-    }))
+    const institution = institutionName ?? 'Bank'
 
-    const { data: upserted, error: upErr } = await svc
+    // Re-attach support: Plaid issues fresh account_ids per Item, so re-linking a
+    // previously-disconnected bank can't match on plaid_account_id. Instead, match
+    // orphaned accounts (those a prior disconnect-keep converted to manual) by their
+    // natural key — (name, type, institution) — and reuse the row so we don't create
+    // a duplicate. Only accounts with no live link (plaid_item_id IS NULL) are eligible.
+    const { data: orphans } = await svc
       .from('accounts')
-      .upsert(rows, { onConflict: 'user_id,plaid_account_id' })
-      .select('id, name, type, balance')
-    if (upErr) {
-      // Roll back the item so the user can cleanly retry.
-      console.error('upsert accounts failed', upErr)
-      await svc.from('plaid_items').delete().eq('id', itemRow.id)
-      return json({ error: 'Failed to store accounts' }, 500)
+      .select('id, name, type, institution')
+      .eq('user_id', user.id)
+      .is('plaid_item_id', null)
+    const orphanByKey = new Map<string, string>(
+      (orphans ?? []).map((o) => [`${o.institution}|${o.name}|${o.type}`, o.id]),
+    )
+    const usedOrphanIds = new Set<string>()
+
+    const inserts: Record<string, unknown>[] = []
+    const reattached: { id: string; name: string; type: string; balance: number }[] = []
+
+    for (const a of acctResp.data.accounts) {
+      const type = mapAccountType(a)
+      const balance = accountBalance(a)
+      const key = `${institution}|${a.name}|${type}`
+      const orphanId = orphanByKey.get(key)
+
+      if (orphanId && !usedOrphanIds.has(orphanId)) {
+        usedOrphanIds.add(orphanId)
+        // Reuse the existing row; clear its stale Plaid transactions so the next
+        // sync repopulates them fresh (the new Item has new plaid_transaction_ids).
+        const { error: updErr } = await svc
+          .from('accounts')
+          .update({
+            type,
+            institution,
+            balance,
+            plaid_item_id: itemRow.id,
+            plaid_account_id: a.account_id,
+            is_manual: false,
+          })
+          .eq('id', orphanId)
+        if (updErr) {
+          console.error('re-attach account failed', updErr)
+          await svc.from('plaid_items').delete().eq('id', itemRow.id)
+          return json({ error: 'Failed to store accounts' }, 500)
+        }
+        await svc
+          .from('transactions')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('account_id', orphanId)
+          .eq('source', 'plaid')
+        reattached.push({ id: orphanId, name: a.name, type, balance })
+      } else {
+        inserts.push({
+          user_id: user.id,
+          name: a.name,
+          type,
+          institution,
+          balance,
+          plaid_item_id: itemRow.id,
+          plaid_account_id: a.account_id,
+          is_manual: false,
+        })
+      }
+    }
+
+    let inserted: { id: string; name: string; type: string; balance: number }[] = []
+    if (inserts.length > 0) {
+      const { data: up, error: upErr } = await svc
+        .from('accounts')
+        .upsert(inserts, { onConflict: 'user_id,plaid_account_id' })
+        .select('id, name, type, balance')
+      if (upErr) {
+        // Roll back the item so the user can cleanly retry.
+        console.error('upsert accounts failed', upErr)
+        await svc.from('plaid_items').delete().eq('id', itemRow.id)
+        return json({ error: 'Failed to store accounts' }, 500)
+      }
+      inserted = up ?? []
     }
 
     return json({
       item_id: plaidItemId,
       institution: institutionName,
-      accounts: upserted ?? [],
+      accounts: [...reattached, ...inserted],
     })
   } catch (e) {
     console.error('exchange failed', e)
