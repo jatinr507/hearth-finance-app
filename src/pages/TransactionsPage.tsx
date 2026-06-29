@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/Badge'
 import { TransactionCategorySheet } from '@/components/TransactionCategorySheet'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useTransactions } from '@/hooks/useTransactions'
+import { isInflow } from '@/lib/txnDirection'
 import type { User } from '@supabase/supabase-js'
 import type { Transaction } from '@/types/database'
 
@@ -20,10 +21,11 @@ export function TransactionsPage({ user }: TransactionsPageProps) {
   const filtered = useMemo(() => {
     return transactions.filter((t) => {
       const matchesSearch = t.description.toLowerCase().includes(search.toLowerCase())
+      const inflow = isInflow(t)
       const matchesType =
         filterType === 'all' ||
-        (filterType === 'income' && t.category?.is_income) ||
-        (filterType === 'expense' && !t.category?.is_income)
+        (filterType === 'income' && inflow) ||
+        (filterType === 'expense' && !inflow)
       return matchesSearch && matchesType
     })
   }, [transactions, search, filterType])
@@ -125,7 +127,7 @@ function TransactionRow({
   transaction: Transaction
   onTap: (t: Transaction) => void
 }) {
-  const isIncome = t.category?.is_income ?? false
+  const isIncome = isInflow(t)
 
   return (
     <button

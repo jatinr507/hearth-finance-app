@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/Card'
 import { formatCurrency } from '@/lib/utils'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useAccounts } from '@/hooks/useAccounts'
+import { isInflow } from '@/lib/txnDirection'
 import type { User } from '@supabase/supabase-js'
 
 interface DashboardPageProps {
@@ -69,12 +70,12 @@ export function DashboardPage({ user }: DashboardPageProps) {
   )
 
   const income = useMemo(
-    () => cashFlowTx.filter((t) => t.category?.is_income).reduce((s, t) => s + t.amount, 0),
+    () => cashFlowTx.filter((t) => isInflow(t)).reduce((s, t) => s + t.amount, 0),
     [cashFlowTx],
   )
 
   const spending = useMemo(
-    () => cashFlowTx.filter((t) => !t.category?.is_income).reduce((s, t) => s + t.amount, 0),
+    () => cashFlowTx.filter((t) => !isInflow(t)).reduce((s, t) => s + t.amount, 0),
     [cashFlowTx],
   )
 
@@ -93,7 +94,7 @@ export function DashboardPage({ user }: DashboardPageProps) {
       const end = endOfMonth(month)
       const net = transactions
         .filter((t) => { const d = parseISO(t.date); return d >= start && d <= end })
-        .reduce((s, t) => s + (t.category?.is_income ? t.amount : -t.amount), 0)
+        .reduce((s, t) => s + (isInflow(t) ? t.amount : -t.amount), 0)
       return { month: format(month, months > 6 ? 'MMM yy' : 'MMM'), net, label: format(month, 'MMMM yyyy') }
     })
     // Work backwards from current net worth to reconstruct history
@@ -118,7 +119,7 @@ export function DashboardPage({ user }: DashboardPageProps) {
       const total = transactions
         .filter((t) => {
           const d = parseISO(t.date)
-          return d >= start && d <= end && !t.category?.is_income
+          return d >= start && d <= end && !isInflow(t)
         })
         .reduce((s, t) => s + t.amount, 0)
       return { month: format(month, 'MMM'), total }
@@ -128,7 +129,7 @@ export function DashboardPage({ user }: DashboardPageProps) {
   const topCategories = useMemo(() => {
     const map = new Map<string, { name: string; color: string; total: number }>()
     cashFlowTx
-      .filter((t) => !t.category?.is_income && t.category)
+      .filter((t) => !isInflow(t) && t.category)
       .forEach((t) => {
         const cat = t.category!
         const existing = map.get(cat.id) ?? { name: cat.name, color: cat.color, total: 0 }

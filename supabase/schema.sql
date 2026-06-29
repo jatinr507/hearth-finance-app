@@ -94,6 +94,9 @@ create table if not exists public.transactions (
   source text not null check (source in ('csv', 'manual', 'plaid')) default 'csv',
   plaid_transaction_id text,
   pending boolean not null default false,
+  -- Cash-flow direction (Plaid convention: positive amount = money OUT).
+  -- Nullable: legacy rows fall back to category.is_income in the app.
+  direction text check (direction in ('inflow', 'outflow')),
   notes text,
   created_at timestamptz not null default now(),
   -- Prevent duplicate imports from CSV

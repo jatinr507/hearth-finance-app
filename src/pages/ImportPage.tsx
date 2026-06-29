@@ -13,6 +13,7 @@ import {
 } from '@/lib/csvParsers'
 import { supabase } from '@/lib/supabase'
 import { assignCategory } from '@/lib/categorize'
+import { directionFromType } from '@/lib/txnDirection'
 import { useAccounts } from '@/hooks/useAccounts'
 import type { User } from '@supabase/supabase-js'
 import type { AccountType, CategoryRule } from '@/types/database'
@@ -197,6 +198,7 @@ export function ImportPage({ user }: ImportPageProps) {
           amount: t.amount,
           category_id,
           source: 'csv' as const,
+          direction: directionFromType(t.type),
           notes: null,
         }
       })
