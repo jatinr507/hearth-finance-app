@@ -33,8 +33,15 @@ create table if not exists public.accounts (
 
 -- Full UNIQUE constraint (not a partial index) so PostgREST upserts can target
 -- it via ON CONFLICT. NULLs are distinct, so manual accounts are unaffected.
-alter table public.accounts
-  add constraint accounts_user_plaid_account unique (user_id, plaid_account_id);
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'accounts_user_plaid_account'
+  ) then
+    alter table public.accounts
+      add constraint accounts_user_plaid_account unique (user_id, plaid_account_id);
+  end if;
+end $$;
 
 -- System categories (shared, no user_id)
 create table if not exists public.categories (
@@ -100,8 +107,15 @@ create index if not exists transactions_account on public.transactions(account_i
 -- Stable dedup/update key for Plaid-sourced rows (survives pending -> posted).
 -- Full UNIQUE constraint (not a partial index) so PostgREST upserts can target
 -- it via ON CONFLICT. NULLs are distinct, so CSV/manual rows are unaffected.
-alter table public.transactions
-  add constraint transactions_user_plaid_txn unique (user_id, plaid_transaction_id);
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'transactions_user_plaid_txn'
+  ) then
+    alter table public.transactions
+      add constraint transactions_user_plaid_txn unique (user_id, plaid_transaction_id);
+  end if;
+end $$;
 
 -- Row Level Security
 -- plaid_items: RLS on, NO policies — clients get zero rows; service role bypasses.
